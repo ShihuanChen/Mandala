@@ -1,9 +1,11 @@
 .venv/
 __pycache__/
 *.pyc
-data/eegmmidb/
+data/deap/
 *.edf
 *.event
+*.dat
 *.part
+*.zip
 .DS_Store
 Thumbs.db

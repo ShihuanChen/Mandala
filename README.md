@@ -23,6 +23,14 @@ python server/websocket-server.py      # ws://127.0.0.1:8765，10 Hz 模拟推�
 # 页面左侧切到「实时」
 ```
 
+真实 EEG 数据（DEAP，替代尚未到手的 EPOC X）：
+
+```bash
+python data/fetch_deap.py                                  # 一次性下载 2.9 GB + 解压
+.venv/Scripts/python.exe server/eeg-deap-server.py --subject 1 --trial 0 --loop
+# 同一端口 8765、同一消息格式，网页端不用改
+```
+
 必须用 HTTP 服务打开，不能直接双击 `index.html`（ES modules 需要同源）。
 
 ---
@@ -44,9 +52,13 @@ new-chinese-bci/
 │   ├── export.js         PNG / JSON 导出
 │   └── styles.css        界面样式
 ├── data/
-│   └── simulated-state.json   一段 24 帧模拟状态（250 ms/帧）
+│   ├── simulated-state.json   一段 24 帧模拟状态（250 ms/帧）
+│   ├── fetch_deap.py          DEAP 下载 + 解压（ModelScope 镜像）
+│   └── fetch_eegmmidb.py      PhysioNet EEGMMIDB 下载脚本（本机网络不可达，备留）
 └── server/
     ├── websocket-server.py    模拟状态推流服务
+    ├── eeg_features.py        DEAP → 相对频带功率 / 谱熵 / 额区不对称 → 六参数
+    ├── eeg-deap-server.py     DEAP 实时回放服务（同一端口同一格式）
     └── requirements.txt
 ```
 
@@ -91,6 +103,36 @@ new-chinese-bci/
 
 ---
 
+## 真实 EEG：用 DEAP 替代 EPOC X（设备未到手）
+
+选 DEAP 而不是 EEGMMIDB 的原因：DEAP 的 32 导 EEG 通道顺序前 15 个为
+`Fp1 AF3 F3 F7 FC5 T7 P7 O1 O2 P8 T8 FC6 F4 F8 AF4`，与 EPOC X 的 14 导几乎一一对应，
+因此**特征代码与映射规则可以原样迁移到真机**；且每个 trial 附带 valence / arousal /
+dominance / liking 评分，能量化「六参数是否真的跟着情绪维度动」，这是模拟数据做不到的。
+（PhysioNet 在本机被限速到约 0.8 KB/s 并频繁断连，EEGMMIDB 脚本保留但不可用。）
+
+预处理版已经做过 128 Hz 降采样、EOG 去除、4–45 Hz 带通，所以这里不再做滤波。
+
+特征（14 导，2 s 窗，0.1 s 步长，Welch）：
+
+| 六参数 | 由什么算来 | 依据 |
+|---|---|---|
+| `activation` | 相对 β 功率 + 0.5 × 额区 α 不对称（ln αF4 − ln αF3） | β 升高对应唤起；左额相对活跃对应趋近动机 |
+| `stability` | α 相对功率在近 8 帧内波动的反向 | α 越平稳越接近闭眼放松态 |
+| `complexity` | 4–45 Hz 谱熵（归一化） | 谱越平坦，视觉信息量越大 |
+| `change` | 唤醒度的短时变化速度 | 状态转换而非状态水平 |
+| `focus` | Pope 参与度 β/(α+θ)，取 FC5 / FC6 / F3 / F4 | 经典注意参与度指数 |
+| `quality` | 1 − 4 × 伪迹样本比例（超 4 MAD） | DEAP 无阻抗记录，只能用伪迹代理 |
+
+归一化：同一 trial 内做 5–95 百分位映射到 0–1，再做一阶指数平滑（α = 0.3，`change` 取 0.5）。
+百分位归一保证同一被试内部差异可见；**跨被试不可直接比较**，正式实验需改为固定基线
+（静息 60 s 或眼闭基线）后再映射。
+
+限制（写论文时必须写清）：这是离线回放，不是在线闭环；DEAP 的情绪标签是看完 MV 后的
+自评，与实时视觉反馈的因果链不同；`quality` 不是真阻抗。
+
+---
+
 ## 验收
 
 功能：浏览器可启动；两风格可切换；四预设可切换；可暂停/继续；可导出 PNG / JSON；模拟连续变化；断流不崩溃。
@@ -103,8 +145,10 @@ new-chinese-bci/
 
 ## 下一步
 
-1. 接入 EPOC X PM（先 quality + PM 字段 + `-1` 无效值），保持消息格式不变。
-2. Raw EEG：窗口化、相对频带功率、个体基线、时间平滑。
-3. 审美确认后迁移 TouchDesigner（OSC / WebSocket 接收同一六参数）。
-4. Blender 只做基础资产（花瓣 / 丝带 / 珠体 / 羽片），实时端实例化，不实时调 3D 生成 API。
-5. 气味 / 音乐 / 投影扩展，仍以六参数为唯一接口。
+1. ~~接入 EPOC X PM~~ → 设备未到手，先用 DEAP 打通「真实 EEG → 六参数 → 视觉」全链路（已完成）。
+2. 设备到手后：Cortex Raw EEG（需付费 Premium Developer API license，Basic 只给频带与 0.1 Hz 指标），
+   把 `eeg-deap-server.py` 的取数部分换成 Cortex WebSocket，特征与映射不动。
+3. 固定基线校准（静息 60 s）替换会话内百分位归一，使跨被试可比。
+4. 审美确认后迁移 TouchDesigner（OSC / WebSocket 接收同一六参数）；注意非商业版输出上限 1280×1280。
+5. Blender 只做基础资产（花瓣 / 丝带 / 珠体 / 羽片），实时端实例化，不实时调 3D 生成 API。
+6. 气味 / 音乐 / 投影扩展，仍以六参数为唯一接口。

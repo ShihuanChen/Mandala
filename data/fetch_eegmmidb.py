@@ -30,6 +30,20 @@ ROOT = Path(__file__).resolve().parent / "eegmmidb"
 UA = "Mozilla/5.0 (compatible; new-chinese-bci/0.1; academic research)"
 EXTS = (".edf", ".event")
 
+# Env proxies are often set for other tools and silently break or stall physionet
+# downloads, so default to a direct opener and allow an explicit proxy instead.
+_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def set_proxy(proxy: str | None) -> None:
+    global _OPENER
+    if proxy in (None, "", "none", "direct"):
+        _OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    else:
+        _OPENER = urllib.request.build_opener(
+            urllib.request.ProxyHandler({"http": proxy, "https": proxy})
+        )
+
 
 def parse_range(text: str) -> list[int]:
     """'1-3,7' -> [1,2,3,7]"""
@@ -54,7 +68,7 @@ def fetch(url: str, dest: Path, retries: int = 4) -> bool:
     for attempt in range(1, retries + 1):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
-            with urllib.request.urlopen(req, timeout=90) as r, open(tmp, "wb") as f:
+            with _OPENER.open(req, timeout=60) as r, open(tmp, "wb") as f:
                 while chunk := r.read(1 << 16):
                     f.write(chunk)
             if tmp.stat().st_size == 0:
@@ -75,7 +89,10 @@ def main() -> int:
     ap.add_argument("--subjects", default="1-12", help="e.g. 1-12 or 1,5,9")
     ap.add_argument("--runs", default="1-14", help="e.g. 1-14 or 1,2,13,14")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--proxy", default="none", help="none | http://127.0.0.1:7897")
     args = ap.parse_args()
+
+    set_proxy(args.proxy)
 
     subs = parse_range(args.subjects)
     runs = parse_range(args.runs)
