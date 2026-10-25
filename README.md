@@ -27,6 +27,7 @@ python server/websocket-server.py      # ws://127.0.0.1:8765，10 Hz 模拟推�
 
 ```bash
 python data/fetch_deap.py                                  # 一次性下载 2.9 GB + 解压
+start-eeg.bat                                              # 或手动：
 .venv/Scripts/python.exe server/eeg-deap-server.py --subject 1 --trial 0 --loop
 # 同一端口 8765、同一消息格式，网页端不用改
 ```
