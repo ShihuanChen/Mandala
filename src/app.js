@@ -1,12 +1,14 @@
 import { StateEngine, PRESETS } from './state.js';
-import { mapB, mapA, lerpParams } from './mapping.js';
+import { mapB, mapB2, mapA, lerpParams } from './mapping.js';
 import { drawB } from './styleB.js';
-import { drawA } from './styleA.js';
+import { drawB2 } from './styleB2.js';
+import { createStyleA } from './styleA.js';
 import { downloadPNG, downloadJSON, stamp } from './export.js';
 
 const $ = (s) => document.querySelector(s);
 const stageWrap = $('#stageWrap');
 const canvas = $('#stage');
+const glCanvas = $('#stageGL');
 const ctx = canvas.getContext('2d', { alpha: false });
 
 const engine = new StateEngine();
@@ -14,7 +16,7 @@ const engine = new StateEngine();
 let style = 'B';
 let motif = 'lotus';
 let playing = true;
-let params = null;
+const paramsBy = {};
 let W = 1, H = 1;
 let last = performance.now();
 let lastHud = 0;
@@ -22,10 +24,15 @@ let elapsed = 0;
 let lastRec = -1;
 let record = [];
 let replay = null;
+let rendererA = null;
 
 const MOTIF_LABEL = {
-  lotus: '圆形花卉', mandala: '几何曼陀罗', phoenix: '简化凤凰',
-  cloud: '传统云气', leaf: '传统花叶',
+  lotus: '花形', mandala: '八重', phoenix: '羽枝',
+  cloud: '云气', leaf: '叶形',
+};
+const MOTIF_SEED = {
+  lotus: 20261027, mandala: 7717, phoenix: 9091,
+  cloud: 31415, leaf: 27182,
 };
 
 const STATE_ROWS = [
@@ -34,10 +41,12 @@ const STATE_ROWS = [
 ];
 
 const PARAM_META = {
-  B: [['symmetry', '对称份数', 1], ['pointCount', '点数量', 1], ['lineCount', '线数量', 1],
-      ['whitespace', '留白比例', 2], ['lw', '线宽', 2], ['rotSpeed', '旋转速度', 3]],
-  A: [['layers', '径向层数', 1], ['petals', '每层花瓣', 1], ['orbs', '珠体数量', 1],
-      ['ribbons', '丝带数量', 1], ['glow', '发光强度', 1], ['distortion', '局部扭曲', 2]],
+  B: [['symmetry', '对称份数', 1], ['shapes', '图元数量', 1], ['lw', '描边宽度', 1],
+      ['deform', '形变幅度', 2], ['scale', '主体缩放', 2], ['rotSpeed', '旋转速度', 3]],
+  B2: [['sides', '多边形边数', 1], ['layers', '叠层数', 1], ['petals', '中心花瓣', 1],
+       ['light', '光强', 2], ['open', '花瓣开合', 2], ['scale', '主体缩放', 2]],
+  A: [['symmetry', '对称份数', 1], ['density', '单元密度', 2], ['dispersion', '色散强度', 2],
+      ['zoom', '聚焦', 2], ['bloom', '泛光', 2], ['rotSpeed', '旋转速度', 3]],
 };
 
 // ---------- 状态行 ----------
@@ -89,20 +98,29 @@ setInterval(() => {
 // ---------- 风格 ----------
 const styleSeg = $('#styleSeg');
 
+const STYLE_LABEL = {
+  B: '典雅 · 满幅平涂',
+  B2: '典雅 · 同心投影',
+  A: '材质 · 玻璃径向',
+};
+
 function applyStyle() {
-  stageWrap.classList.toggle('light', style === 'B');
+  const isA = style === 'A';
+  stageWrap.classList.toggle('light', !isA);
+  canvas.hidden = isA;
+  glCanvas.hidden = !isA;
   $('#motifSection').hidden = style !== 'B';
   $('#capStyle').textContent = style === 'B'
-    ? `简约典雅 · ${MOTIF_LABEL[motif]}`
-    : '材质对比 · 3D 材质 / 酸性新中式';
+    ? `典雅 · 满幅平涂 · ${MOTIF_LABEL[motif]}`
+    : STYLE_LABEL[style];
 }
 styleSeg.addEventListener('click', (e) => {
   const b = e.target.closest('button');
   if (!b || b.dataset.v === style) return;
   style = b.dataset.v;
   styleSeg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x.dataset.v === style));
-  params = null; // 换风格时重建参数集合
   applyStyle();
+  resize();
 });
 
 $('#motifSelect').addEventListener('change', (e) => {
@@ -129,7 +147,7 @@ btnPlay.addEventListener('click', () => {
 $('#btnReset').addEventListener('click', () => {
   engine.time = 0;
   engine.base = { ...PRESETS[engine.preset] };
-  params = null;
+  for (const k in paramsBy) delete paramsBy[k];
   record = [];
   replay = null;
   elapsed = 0;
@@ -138,13 +156,13 @@ $('#btnReset').addEventListener('click', () => {
 
 // ---------- 导出 ----------
 $('#btnPng').addEventListener('click', () => {
-  const tag = style === 'B' ? '典雅' : '材质';
-  downloadPNG(canvas, `新中式-${tag}-${stamp()}.png`);
+  const tag = style === 'B' ? '平涂' : style === 'B2' ? '投影' : '玻璃';
+  downloadPNG(style === 'A' ? glCanvas : canvas, `新中式-${tag}-${stamp()}.png`);
 });
 $('#btnJson').addEventListener('click', () => {
   downloadJSON({
-    version: '0.1', style, motif, mode: engine.mode,
-    state: engine.last, params,
+    version: '0.2', style, motif, mode: engine.mode,
+    state: engine.last, params: paramsBy[style] || null,
   }, `state-${stamp()}.json`);
 });
 $('#btnSession').addEventListener('click', () => {
@@ -169,13 +187,17 @@ function flashHint(text) {
 }
 
 // ---------- 尺寸 ----------
+// 两块画布叠在同一舞台里：切到材质版时 2D 画布隐藏、WebGL 画布显示，
+// 二者的显示尺寸一致，尺寸只跟舞台走，避免隐藏元素量到 0。
 function resize() {
-  const r = canvas.getBoundingClientRect();
+  const r = stageWrap.getBoundingClientRect();
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   W = Math.max(1, Math.round(r.width));
   H = Math.max(1, Math.round(r.height));
-  canvas.width = Math.round(W * dpr);
-  canvas.height = Math.round(H * dpr);
+  for (const cv of [canvas, glCanvas]) {
+    cv.width = Math.round(W * dpr);
+    cv.height = Math.round(H * dpr);
+  }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
@@ -225,10 +247,11 @@ function updateHud(st) {
     if (el.input.disabled) el.input.value = v;
   }
 
-  if (params) {
+  const pr = paramsBy[style];
+  if (pr) {
     const meta = PARAM_META[style];
     $('#params').innerHTML = meta.map(([k, label, dec]) => {
-      const v = params[k];
+      const v = pr[k];
       const text = dec === 1 ? String(Math.round(v)) : v.toFixed(dec);
       return `<div><span>${label}</span><b>${text}</b></div>`;
     }).join('');
@@ -246,6 +269,21 @@ function updateHud(st) {
 }
 
 // ---------- 主循环 ----------
+// WebGL2 不可用时给出可见提示，避免舞台一片空白且无解释
+function noticeNoWebGL() {
+  if (noticeNoWebGL.done) return;
+  noticeNoWebGL.done = true;
+  ctx.save();
+  ctx.fillStyle = '#E9E5DC';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#6B6355';
+  ctx.font = '15px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('当前浏览器未启用 WebGL2，材质·玻璃径向不可用', W / 2, H / 2 - 10);
+  ctx.fillText('可改用典雅·平涂或典雅·同心投影', W / 2, H / 2 + 16);
+  ctx.restore();
+}
+
 function frame(now) {
   const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
   last = now;
@@ -256,18 +294,24 @@ function frame(now) {
     st = sampleReplay(now);
     isReplay = !!st;
     if (!st) replay = null;
-  }
-  if (!st) {
+  }  if (!st) {
     if (playing) { elapsed += dt; st = engine.tick(dt); }
     else st = engine.last ? { ...engine.last } : engine.tick(0);
   }
 
-  const target = style === 'B' ? mapB(st) : mapA(st);
+  const target = style === 'B' ? mapB(st) : style === 'B2' ? mapB2(st) : mapA(st);
   const alpha = isReplay ? 1 : 1 - Math.exp(-dt * (2 + st.quality * 7));
-  params = params ? lerpParams(params, target, alpha) : { ...target };
+  const prev = paramsBy[style];
+  const pr = prev ? lerpParams(prev, target, alpha) : { ...target };
+  paramsBy[style] = pr;
 
-  if (style === 'B') drawB(ctx, W, H, st, params, st.time, motif);
-  else drawA(ctx, W, H, st, params, st.time);
+  if (style === 'B') drawB(ctx, W, H, st, pr, st.time, MOTIF_SEED[motif]);
+  else if (style === 'B2') drawB2(ctx, W, H, st, pr, st.time);
+  else {
+    if (!rendererA) rendererA = createStyleA(glCanvas);
+    if (rendererA) rendererA.draw(st, pr, st.time, dt);
+    else noticeNoWebGL();
+  }
 
   if (playing && !isReplay) recordFrame(st);
   if (now - lastHud > 110) { lastHud = now; updateHud(st); }
@@ -276,6 +320,12 @@ function frame(now) {
 }
 
 // ---------- 启动 ----------
+// 支持 index.html?style=B2 直接进某个风格，便于截图与分享单版效果
+const qStyle = new URLSearchParams(location.search).get('style');
+if (['B', 'B2', 'A'].includes(qStyle)) {
+  style = qStyle;
+  styleSeg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x.dataset.v === style));
+}
 applyStyle();
 resize();
 new ResizeObserver(resize).observe(stageWrap);

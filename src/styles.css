@@ -292,6 +292,7 @@ select {
 .compare-head h1 { margin: 0; font-size: 16px; }
 .compare-head span { font-size: 11px; color: var(--muted); }
 .compare-body { display: grid; grid-template-columns: 1fr 1fr; height: calc(100vh - 58px); }
+.compare-body.three { grid-template-columns: 1fr 1fr 1fr; }
 .pane { position: relative; overflow: hidden; }
 .pane + .pane { border-left: 1px solid rgba(255,255,255,.12); }
 .pane canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -312,9 +313,15 @@ select {
 .pane.light .cap { color: #3A3227; }
 .pane .cap small { display: block; font-family: inherit; font-size: 10.5px; letter-spacing: .16em; opacity: .6; margin-bottom: 5px; }
 
-@media (max-width: 1080px) {
+@media (max-width: 1200px) {
   .app { grid-template-columns: 232px minmax(0,1fr) 260px; }
   .compare-body { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; height: auto; }
+  .compare-body.three { grid-template-rows: 1fr 1fr 1fr; }
+}
+@media (max-height: 820px) {
+  .panel { gap: 13px; padding: 14px 18px 12px; }
+  section { gap: 7px; }
+  .brand-mark { width: 32px; height: 32px; font-size: 18px; }
 }
 @media (max-width: 860px) {
   .app { grid-template-columns: 1fr; grid-template-rows: auto minmax(320px, 58vh) auto; height: auto; min-height: 100vh; }

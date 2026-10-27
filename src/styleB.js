@@ -1,395 +1,220 @@
-// 风格 B：简约典雅 / 点线面中式。
-// 约束：单一主体、2–4 色、留白 ≥30%、低动态、主体轮廓不被状态变化破坏。
-import { PAL } from './palette.js';
+// 风格 B1：典雅 · 满幅平涂万花筒
+// 参考特征：二面体对称（旋转复制 + 镜像）、平涂色块 + 白色描边、完全不用渐变、
+// 满幅无留白、底色大面积鲑鱼粉、橙/紫/绿做点缀、全部压在同一明度带。
+// 做法：把一个半扇区切成若干同心环带，每环带放固定槽位的图元，
+// 再按对称阶数旋转复制并镜像出去；图元朝外（局部 +X 为径向），便于拼出花瓣放射感。
 
-const B = PAL.b;
 const TAU = Math.PI * 2;
 
-// ---------- 纸面肌理（只生成一次） ----------
-let tex = null;
-function paperTexture() {
-  if (tex) return tex;
-  const N = 256;
-  const c = document.createElement('canvas');
-  c.width = c.height = N;
-  const g = c.getContext('2d');
-  let seed = 20261024;
-  const rnd = () => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 4294967296;
+// 环带定义：r 为半径（相对画布半径），slots 为每个半扇区的槽位数
+const RINGS = [
+  { r: 0.085, size: 0.050, slots: 1, types: ['dot'], cols: ['deep', 'cream'] },
+  { r: 0.165, size: 0.072, slots: 2, types: ['eye'], cols: ['violet', 'deep', 'cream'] },
+  { r: 0.265, size: 0.076, slots: 2, types: ['petal'], cols: ['violet', 'coral', 'lilac'] },
+  { r: 0.375, size: 0.084, slots: 3, types: ['eye'], cols: ['coral', 'orange', 'violet'] },
+  { r: 0.495, size: 0.090, slots: 3, types: ['blade', 'petal'], cols: ['green', 'violet', 'coral'] },
+  { r: 0.610, size: 0.096, slots: 3, types: ['eye'], cols: ['coral', 'orange', 'cream'] },
+  { r: 0.725, size: 0.104, slots: 3, types: ['petal', 'blade'], cols: ['orange', 'coral', 'violet'] },
+  { r: 0.855, size: 0.115, slots: 3, types: ['wedge'], cols: ['orange', 'coral'] },
+  { r: 1.020, size: 0.135, slots: 2, types: ['wedge'], cols: ['coral', 'orange'] },
+];
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-  for (let i = 0; i < 900; i++) {
-    const x = rnd() * N, y = rnd() * N, len = 6 + rnd() * 34;
-    g.strokeStyle = `rgba(120,94,56,${0.02 + rnd() * 0.045})`;
-    g.lineWidth = 0.5 + rnd() * 0.7;
-    g.beginPath();
-    g.moveTo(x, y);
-    g.lineTo(x + (rnd() - 0.5) * 4, y + len);
-    g.stroke();
-  }
-  for (let i = 0; i < 260; i++) {
-    g.fillStyle = `rgba(110,86,52,${0.02 + rnd() * 0.05})`;
-    g.fillRect(rnd() * N, rnd() * N, 1.2, 1.2);
-  }
-  tex = c;
-  return tex;
 }
-let patternCache = new WeakMap();
 
-// ---------- 基础笔形 ----------
-function petalPath(g, len, wid) {
+// 图元池按母题种子生成一次；绘制时按复杂度截取槽位，避免参数变化导致图元跳变
+let pool = null;
+let poolSeed = 0;
+function ensurePool(seed) {
+  if (pool && poolSeed === seed) return;
+  poolSeed = seed;
+  const rnd = mulberry32(seed);
+  const list = [];
+  for (let ri = 0; ri < RINGS.length; ri++) {
+    const ring = RINGS[ri];
+    for (let slot = 0; slot < 3; slot++) {
+      if (slot >= ring.slots) continue;
+      list.push({
+        ring: ri,
+        slot,
+        r: ring.r + (rnd() - 0.5) * 0.02,
+        a: (slot + 0.5) / ring.slots + (rnd() - 0.5) * 0.06,   // 0..1，乘半扇区
+        size: ring.size * (1.15 + rnd() * 0.55),
+        type: ring.types[Math.floor(rnd() * ring.types.length)],
+        color: ring.cols[Math.floor(rnd() * ring.cols.length)],
+        tilt: (rnd() - 0.5) * 0.16,
+        wide: 0.80 + rnd() * 0.45,
+        d1: rnd(),
+        d2: rnd(),
+        double: rnd() > 0.62,
+      });
+    }
+  }
+  list.sort((p, q) => q.r - p.r); // 外层先画
+  pool = list;
+}
+
+const hsl = (h, s, l, a = 1) => `hsla(${h}, ${s}%, ${l}%, ${a})`;
+
+function palette(hue, sat) {
+  const s = (v) => Math.min(100, v * sat);
+  return {
+    ground: hsl(6 + hue, s(56), 73),
+    orange: hsl(24 + hue, s(88), 55),
+    coral: hsl(11 + hue, s(76), 64),
+    violet: hsl(272 + hue, s(32), 42),
+    green: hsl(92 + hue, s(40), 44),
+    cream: hsl(40 + hue, s(52), 92),
+    lilac: hsl(276 + hue, s(42), 76),
+    deep: hsl(320 + hue, s(30), 18),
+    white: hsl(36 + hue, s(40), 97),
+  };
+}
+
+// 以下路径以局部 +X 为“朝外”。宽度由 draw 时按扇区弧长传入，
+// 使相邻图元自然咬合，不随对称份数变化而散架。
+function eyePath(g, len, wid, d) {
+  const h = len * (0.95 + 0.35 * d);
+  const w = wid * (0.90 + 0.30 * d);
   g.beginPath();
-  g.moveTo(0, 0);
-  g.bezierCurveTo(wid * 0.86, -len * 0.30, wid * 0.56, -len * 0.84, 0, -len);
-  g.bezierCurveTo(-wid * 0.56, -len * 0.84, -wid * 0.86, -len * 0.30, 0, 0);
+  g.moveTo(-h * 0.22, 0);
+  g.bezierCurveTo(h * 0.06, -w, h * 0.68, -w * 0.92, h, 0);
+  g.bezierCurveTo(h * 0.68, w * 0.92, h * 0.06, w, -h * 0.22, 0);
   g.closePath();
 }
 
-function leafPath(g, len, wid) {
+function petalPath(g, len, wid, d) {
+  const h = len * (1.45 + 0.40 * d);
+  const w = wid * (0.78 + 0.28 * d);
   g.beginPath();
   g.moveTo(0, 0);
-  g.quadraticCurveTo(wid, -len * 0.5, 0, -len);
-  g.quadraticCurveTo(-wid, -len * 0.5, 0, 0);
+  g.bezierCurveTo(w * 1.25, h * 0.16, w * 0.52, h * 0.76, 0, h);
+  g.bezierCurveTo(-w * 0.52, h * 0.76, -w * 1.25, h * 0.16, 0, 0);
   g.closePath();
 }
 
-function spiralPath(g, r, turns) {
-  const steps = 64;
+function bladePath(g, len, wid, d) {
+  const h = len * (1.45 + 0.40 * d);
+  const w = wid * (0.45 + 0.20 * d);
   g.beginPath();
-  for (let i = 0; i <= steps; i++) {
-    const u = i / steps;
-    const a = turns * TAU * u;
-    const rr = r * (1 - 0.62 * u);
-    const x = Math.cos(a) * rr;
-    const y = Math.sin(a) * rr - r * 0.22;
-    i ? g.lineTo(x, y) : g.moveTo(x, y);
-  }
+  g.moveTo(0, 0);
+  g.quadraticCurveTo(w * 1.8, h * 0.50, 0, h);
+  g.quadraticCurveTo(-w * 1.8, h * 0.50, 0, 0);
+  g.closePath();
 }
 
-function dot(g, x, y, r, color, alpha) {
-  g.globalAlpha = alpha;
-  g.fillStyle = color;
+function wedgePath(g, r0, r1, a) {
   g.beginPath();
-  g.arc(x, y, r, 0, TAU);
-  g.fill();
+  g.moveTo(Math.cos(-a) * r0, Math.sin(-a) * r0);
+  g.lineTo(Math.cos(-a) * r1, Math.sin(-a) * r1);
+  g.arc(0, 0, r1, -a, a);
+  g.lineTo(Math.cos(a) * r0, Math.sin(a) * r0);
+  g.arc(0, 0, r0, a, -a, true);
+  g.closePath();
 }
 
-// ---------- 母题 ----------
-function lotus(g, R, p) {
-  const n = Math.round(p.symmetry);
-  const step = TAU / n;
-  // 三层花瓣锚定在不同半径上，避免全部汇聚到圆心形成墨团
-  const rings = [
-    { f: 0.95, off: 0, accent: true },
-    { f: 0.70, off: step / 2, accent: false },
-    { f: 0.46, off: 0, accent: false },
-  ];
-  for (const ring of rings) {
-    const tip = R * ring.f;
-    const inner = tip * 0.52;
-    const len = tip - inner;
-    const wid = len * 0.62;
-    for (let i = 0; i < n; i++) {
+export function drawB(ctx, W, H, st, pr, t, seed = 20261027) {
+  ensurePool(seed);
+  const g = ctx;
+  const cx = W / 2;
+  const cy = H / 2;
+  const R = Math.min(W, H) * 0.58;
+  const C = palette(pr.hueShift * 20, pr.sat);
+  const N = Math.max(3, Math.round(pr.symmetry));
+  const segH = Math.PI / N;
+  const slots = Math.min(3, Math.max(1, Math.round(pr.shapes / 28 * 3)));
+  const spin = t * pr.rotSpeed;
+
+  // 描边宽度跟随画布半径，保证不同窗口尺寸下观感一致
+  const lw = pr.lw * (R / 620);
+
+  g.save();
+  g.fillStyle = C.ground;
+  g.fillRect(0, 0, W, H);
+
+  g.translate(cx, cy);
+  g.scale(pr.scale, pr.scale);
+  g.rotate(spin);
+  g.lineJoin = 'round';
+  g.lineCap = 'round';
+
+  for (let k = 0; k < N; k++) {
+    for (let mir = 0; mir < 2; mir++) {
       g.save();
-      g.rotate(i * step + ring.off);
-      g.translate(0, -inner);
-      g.strokeStyle = B.ink;
-      g.globalAlpha = 0.82;
-      g.lineWidth = p.lw;
-      petalPath(g, len, wid);
-      g.stroke();
-      g.strokeStyle = B.gold;
-      g.globalAlpha = 0.55;
-      g.lineWidth = Math.max(0.55, p.lw * 0.42);
-      petalPath(g, len * 0.9, wid * 0.62);
-      g.stroke();
-      g.strokeStyle = B.ink;
-      g.globalAlpha = 0.22;
-      g.lineWidth = Math.max(0.4, p.lw * 0.32);
-      g.beginPath();
-      g.moveTo(0, -len * 0.10);
-      g.lineTo(0, -len * 0.90);
-      g.stroke();
-      if (ring.accent) dot(g, 0, -len * 0.99, Math.max(1.1, p.lw * 0.9), B.accent, 0.9);
-      g.restore();
-    }
-  }
-  // 中心
-  g.globalAlpha = 0.72;
-  g.strokeStyle = B.ink;
-  g.lineWidth = p.lw * 0.75;
-  g.beginPath();
-  g.arc(0, 0, R * 0.17, 0, TAU);
-  g.stroke();
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * TAU;
-    g.globalAlpha = 0.35;
-    g.beginPath();
-    g.moveTo(Math.cos(a) * R * 0.19, Math.sin(a) * R * 0.19);
-    g.lineTo(Math.cos(a) * R * 0.22, Math.sin(a) * R * 0.22);
-    g.stroke();
-  }
-  dot(g, 0, 0, Math.max(1.8, R * 0.028), B.gold, 0.95);
-}
+      g.rotate(k * 2 * segH);
+      if (mir) g.scale(1, -1);
 
-function mandala(g, R, p) {
-  const n = Math.round(p.symmetry);
-  const step = TAU / n;
-  const rings = [
-    { f: 0.32, rot: 0 },
-    { f: 0.62, rot: Math.PI / n },
-    { f: 0.95, rot: 0 },
-  ];
-  for (const rg of rings) {
-    const r = R * rg.f;
-    g.beginPath();
-    for (let i = 0; i <= n; i++) {
-      const a = i * step + rg.rot;
-      const x = Math.cos(a) * r, y = Math.sin(a) * r;
-      i ? g.lineTo(x, y) : g.moveTo(x, y);
-    }
-    g.closePath();
-    g.strokeStyle = B.ink;
-    g.globalAlpha = 0.78;
-    g.lineWidth = p.lw;
-    g.stroke();
-  }
-  for (let i = 0; i < n; i++) {
-    const a = i * step;
-    g.strokeStyle = B.gold;
-    g.globalAlpha = 0.34;
-    g.lineWidth = Math.max(0.55, p.lw * 0.45);
-    g.beginPath();
-    g.moveTo(Math.cos(a) * R * 0.32, Math.sin(a) * R * 0.32);
-    g.lineTo(Math.cos(a) * R * 0.95, Math.sin(a) * R * 0.95);
-    g.stroke();
-    dot(g, Math.cos(a) * R * 0.95, Math.sin(a) * R * 0.95, Math.max(1.2, p.lw * 1.05), i % 2 ? B.gold : B.accent, 0.9);
-  }
-  g.globalAlpha = 0.8;
-  g.strokeStyle = B.indigo;
-  g.lineWidth = p.lw * 0.7;
-  g.beginPath();
-  g.arc(0, 0, R * 0.13, 0, TAU);
-  g.stroke();
-  dot(g, 0, 0, Math.max(1.6, R * 0.02), B.gold, 0.95);
-}
+      for (let i = 0; i < pool.length; i++) {
+        const sh = pool[i];
+        if (sh.slot >= slots) continue;
+        const rad = sh.r * R;
+        const ang = sh.a * segH;
+        const d = pr.deform * (0.55 + 0.45 * sh.d1) * 0.5;
+        const len = sh.size * R;
+        const wid = rad * segH * 0.62 * sh.wide;   // 按扇区弧长定宽，保证咬合
 
-function cloud(g, R, p) {
-  const n = Math.max(4, Math.round(p.symmetry * 0.7));
-  const step = TAU / n;
-  for (let i = 0; i < n; i++) {
-    g.save();
-    g.rotate(i * step);
-    g.translate(0, -R * 0.63);
-    const r = R * 0.31;
-    spiralPath(g, r, 2.2);
-    g.strokeStyle = B.ink;
-    g.globalAlpha = 0.80;
-    g.lineWidth = p.lw;
-    g.stroke();
-    spiralPath(g, r * 0.72, 2.0);
-    g.strokeStyle = B.gold;
-    g.globalAlpha = 0.45;
-    g.lineWidth = Math.max(0.55, p.lw * 0.45);
-    g.stroke();
-    g.restore();
-  }
-  g.globalAlpha = 0.7;
-  g.strokeStyle = B.ink;
-  g.lineWidth = p.lw * 0.8;
-  g.beginPath();
-  g.arc(0, 0, R * 0.20, 0, TAU);
-  g.stroke();
-  dot(g, 0, 0, Math.max(1.4, R * 0.018), B.accent, 0.9);
-}
-
-function phoenix(g, R, p) {
-  const n = Math.max(5, Math.round(p.symmetry * 0.9));
-  const step = TAU / n;
-  for (let i = 0; i < n; i++) {
-    g.save();
-    g.rotate(i * step);
-    for (let k = -1; k <= 1; k++) {
-      g.save();
-      g.rotate(k * 0.085);
-      const len = R * (k === 0 ? 0.94 : 0.78);
-      const wid = len * (k === 0 ? 0.15 : 0.12);
-      // 羽片
-      petalPath(g, len, wid);
-      g.strokeStyle = k === 0 ? B.ink : B.gold;
-      g.globalAlpha = k === 0 ? 0.82 : 0.45;
-      g.lineWidth = k === 0 ? p.lw : Math.max(0.55, p.lw * 0.45);
-      g.stroke();
-      // 羽轴
-      g.globalAlpha = 0.5;
-      g.beginPath();
-      g.moveTo(0, -len * 0.1);
-      g.quadraticCurveTo(wid * 0.4, -len * 0.55, 0, -len * 0.95);
-      g.stroke();
-      // 羽枝
-      for (let b = 1; b <= 4; b++) {
-        const y = -len * (0.22 + b * 0.16);
-        g.globalAlpha = 0.30;
-        g.beginPath();
-        g.moveTo(0, y);
-        g.lineTo(wid * 1.9, y + len * 0.06);
-        g.moveTo(0, y);
-        g.lineTo(-wid * 1.9, y + len * 0.06);
-        g.stroke();
-      }
-      if (k === 0) dot(g, 0, -len * 0.99, Math.max(1.2, p.lw), B.accent, 0.9);
-      g.restore();
-    }
-    g.restore();
-  }
-  dot(g, 0, 0, Math.max(2.2, R * 0.03), B.gold, 0.95);
-  g.globalAlpha = 0.7;
-  g.strokeStyle = B.ink;
-  g.lineWidth = p.lw * 0.7;
-  g.beginPath();
-  g.arc(0, 0, R * 0.10, 0, TAU);
-  g.stroke();
-}
-
-function leaf(g, R, p) {
-  const n = Math.max(4, Math.round(p.symmetry * 0.75));
-  const step = TAU / n;
-  for (let i = 0; i < n; i++) {
-    g.save();
-    g.rotate(i * step);
-    g.strokeStyle = B.ink;
-    g.globalAlpha = 0.68;
-    g.lineWidth = p.lw * 0.85;
-    g.beginPath();
-    g.moveTo(0, -R * 0.16);
-    g.quadraticCurveTo(R * 0.07, -R * 0.56, 0, -R * 0.94);
-    g.stroke();
-    for (let k = 1; k <= 3; k++) {
-      const y = -R * (0.26 + k * 0.19);
-      for (const s of [-1, 1]) {
         g.save();
-        g.translate(0, y);
-        g.rotate(s * 0.95);
-        leafPath(g, R * 0.19, R * 0.075);
-        g.fillStyle = B.green;
-        g.globalAlpha = 0.42;
+        g.translate(Math.cos(ang) * rad, Math.sin(ang) * rad);
+        g.rotate(ang + sh.tilt);
+        g.fillStyle = C[sh.color];
+
+        if (sh.type === 'eye') eyePath(g, len, wid, d);
+        else if (sh.type === 'petal') petalPath(g, len, wid, d);
+        else if (sh.type === 'blade') bladePath(g, len, wid, d);
+        else if (sh.type === 'wedge') {
+          wedgePath(g, rad * 0.52, rad * (1.42 + 0.25 * d), segH * 0.97);
+        } else {
+          g.beginPath();
+          g.arc(0, 0, Math.max(2, wid * 0.55), 0, TAU);
+        }
+
         g.fill();
-        g.strokeStyle = B.ink;
-        g.globalAlpha = 0.75;
-        g.lineWidth = Math.max(0.55, p.lw * 0.6);
+        g.lineWidth = lw;
+        g.strokeStyle = C.white;
         g.stroke();
+        if (sh.double) {
+          g.lineWidth = lw * 0.5;
+          g.strokeStyle = C.lilac;
+          g.stroke();
+        }
         g.restore();
       }
+      g.restore();
     }
+  }
+
+  // 中心：一簇小花压住视觉重心（不要压成黑块）
+  g.save();
+  g.rotate(spin * 1.6);
+  for (let i = 0; i < 6; i++) {
+    g.save();
+    g.rotate(i * TAU / 6);
+    g.translate(0, -R * 0.012);
+    g.fillStyle = i % 2 ? C.coral : C.violet;
+    petalPath(g, R * 0.038, R * 0.026, 0.25);
+    g.fill();
+    g.lineWidth = lw * 0.9;
+    g.strokeStyle = C.white;
+    g.stroke();
     g.restore();
   }
-  dot(g, 0, 0, Math.max(1.6, R * 0.02), B.gold, 0.9);
-}
-
-const MOTIFS = { lotus, mandala, cloud, phoenix, leaf };
-
-// ---------- 辅助结构与针脚 ----------
-function guides(g, R, p) {
-  const n = Math.round(p.lineCount);
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * TAU;
-    g.strokeStyle = B.indigo;
-    g.globalAlpha = 0.10;
-    g.lineWidth = 0.6;
-    g.beginPath();
-    g.moveTo(Math.cos(a) * R * 0.12, Math.sin(a) * R * 0.12);
-    g.lineTo(Math.cos(a) * R * 1.02, Math.sin(a) * R * 1.02);
-    g.stroke();
-  }
-  g.strokeStyle = B.gold;
-  g.globalAlpha = 0.18;
-  g.lineWidth = 0.8;
   g.beginPath();
-  g.arc(0, 0, R * 1.04, 0, TAU);
-  g.stroke();
-}
-
-function stitches(g, R, p) {
-  const n = Math.max(8, Math.round(p.pointCount * 0.12));
-  const base = R * 1.10;
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * TAU;
-    const wob = 1 + 0.035 * Math.sin(i * 1.7);
-    const r = base * wob;
-    const rad = i % 7 === 0 ? Math.max(1.3, p.lw * 1.0) : Math.max(0.7, p.lw * 0.5);
-    dot(g, Math.cos(a) * r, Math.sin(a) * r, rad, i % 9 === 0 ? B.accent : B.ink, i % 9 === 0 ? 0.7 : 0.38);
-  }
-}
-
-function seal(g, W, H, p) {
-  const s = Math.min(46, Math.max(24, Math.min(W, H) * 0.042));
-  g.save();
-  g.translate(W - s * 1.6, H - s * 1.6);
-  g.rotate(-0.05);
-  g.globalAlpha = 0.86 * p.opacity;
-  g.fillStyle = B.accent;
-  g.fillRect(-s / 2, -s / 2, s, s);
-  g.globalAlpha = 0.95 * p.opacity;
-  g.fillStyle = '#F6EFE1';
-  g.font = `600 ${s * 0.5}px "Songti SC","Noto Serif SC",serif`;
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText('曼', 0, s * 0.03);
+  g.arc(0, 0, R * 0.014, 0, TAU);
+  g.fillStyle = C.cream;
+  g.fill();
   g.restore();
-}
 
-// ---------- 主绘制 ----------
-export function drawB(ctx, W, H, st, p, t, motif = 'lotus') {
-  const cx = W / 2, cy = H / 2;
-  const R = Math.min(W, H) / 2;
+  g.restore();
 
-  ctx.save();
-  ctx.fillStyle = B.paper;
-  ctx.fillRect(0, 0, W, H);
-
-  // 纸纤维
-  const pat = patternCache.get(ctx) || ctx.createPattern(paperTexture(), 'repeat');
-  patternCache.set(ctx, pat);
-  ctx.globalAlpha = 0.6;
-  ctx.fillStyle = pat;
-  ctx.fillRect(0, 0, W, H);
-  ctx.globalAlpha = 1;
-
-  // 边缘暖调渐隐
-  const vg = ctx.createRadialGradient(cx, cy, Math.min(W, H) * 0.22, cx, cy, Math.max(W, H) * 0.78);
-  vg.addColorStop(0, 'rgba(0,0,0,0)');
-  vg.addColorStop(1, B.vignette);
-  ctx.fillStyle = vg;
-  ctx.fillRect(0, 0, W, H);
-
-  const breathe = 1 + p.breath * Math.sin(t * p.breathSpeed + 0.6);
-  const mr = R * p.motifScale * breathe;
-  const rot = t * p.rotSpeed;
-
-  ctx.globalAlpha = p.opacity;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(rot);
-  guides(ctx, mr, p);
-  (MOTIFS[motif] || lotus)(ctx, mr, p);
-  ctx.restore();
-
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(rot * 0.5);
-  stitches(ctx, mr, p);
-  ctx.restore();
-
-  seal(ctx, W, H, p);
-
-  // 质量低时整体减淡，作为“信号不足”的视觉提示
-  if (p.opacity < 0.99) {
-    ctx.globalAlpha = (1 - p.opacity) * 0.9;
-    ctx.fillStyle = B.paper;
-    ctx.fillRect(0, 0, W, H);
+  if (pr.opacity < 1) {
+    g.fillStyle = `rgba(255, 246, 240, ${(1 - pr.opacity) * 0.5})`;
+    g.fillRect(0, 0, W, H);
   }
-  ctx.restore();
 }

@@ -1,21 +1,23 @@
 import { StateEngine } from './state.js';
-import { mapB, mapA, lerpParams } from './mapping.js';
+import { mapB, mapB2, mapA, lerpParams } from './mapping.js';
 import { drawB } from './styleB.js';
-import { drawA } from './styleA.js';
+import { drawB2 } from './styleB2.js';
+import { createStyleA } from './styleA.js';
 import { downloadPNG, stamp } from './export.js';
 
 const $ = (s) => document.querySelector(s);
 
 const engine = new StateEngine();
 let playing = true;
-let paramsB = null;
-let paramsA = null;
+const params = { B: null, B2: null, A: null };
 let last = performance.now();
 
-const cvB = $('#cvB'), cvA = $('#cvA');
-const ctxB = cvB.getContext('2d', { alpha: false });
-const ctxA = cvA.getContext('2d', { alpha: false });
-let boxB = { w: 1, h: 1 }, boxA = { w: 1, h: 1 };
+const cv1 = $('#cv1'), cv2 = $('#cv2'), cv3 = $('#cv3');
+const ctx1 = cv1.getContext('2d', { alpha: false });
+const ctx2 = cv2.getContext('2d', { alpha: false });
+let rendererA = null;
+let warned = false;
+let box = { w: 1, h: 1 };
 
 function fit(canvas, ctx) {
   const r = canvas.getBoundingClientRect();
@@ -24,13 +26,14 @@ function fit(canvas, ctx) {
   const h = Math.max(1, Math.round(r.height));
   canvas.width = Math.round(w * dpr);
   canvas.height = Math.round(h * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   return { w, h };
 }
 
 function resize() {
-  boxB = fit(cvB, ctxB);
-  boxA = fit(cvA, ctxA);
+  box = fit(cv1, ctx1);
+  fit(cv2, ctx2);
+  fit(cv3);
 }
 
 function caption(st) {
@@ -49,17 +52,31 @@ function frame(now) {
   const st = playing ? engine.tick(dt) : (engine.last ? { ...engine.last } : engine.tick(0));
   const alpha = 1 - Math.exp(-dt * (2 + st.quality * 7));
 
-  const tB = mapB(st);
-  const tA = mapA(st);
-  paramsB = paramsB ? lerpParams(paramsB, tB, alpha) : { ...tB };
-  paramsA = paramsA ? lerpParams(paramsA, tA, alpha) : { ...tA };
+  params.B = params.B ? lerpParams(params.B, mapB(st), alpha) : { ...mapB(st) };
+  params.B2 = params.B2 ? lerpParams(params.B2, mapB2(st), alpha) : { ...mapB2(st) };
+  params.A = params.A ? lerpParams(params.A, mapA(st), alpha) : { ...mapA(st) };
 
-  drawB(ctxB, boxB.w, boxB.h, st, paramsB, st.time, 'lotus');
-  drawA(ctxA, boxA.w, boxA.h, st, paramsA, st.time);
+  drawB(ctx1, box.w, box.h, st, params.B, st.time, 20261027);
+  drawB2(ctx2, box.w, box.h, st, params.B2, st.time);
+  if (!rendererA) rendererA = createStyleA(cv3);
+  if (rendererA) rendererA.draw(st, params.A, st.time, dt);
+  else if (!warned) {
+    warned = true;
+    const g3 = cv3.getContext('2d');
+    if (g3) {
+      g3.fillStyle = '#E9E5DC';
+      g3.fillRect(0, 0, cv3.width, cv3.height);
+      g3.fillStyle = '#6B6355';
+      g3.font = '14px system-ui, sans-serif';
+      g3.textAlign = 'center';
+      g3.fillText('浏览器未启用 WebGL2，此栏不可用', cv3.width / 2, cv3.height / 2);
+    }
+  }
 
   const text = caption(st);
-  $('#capB').textContent = text;
-  $('#capA').textContent = text;
+  $('#cap1').textContent = text;
+  $('#cap2').textContent = text;
+  $('#cap3').textContent = text;
 
   requestAnimationFrame(frame);
 }
@@ -76,8 +93,9 @@ $('#cPlay').addEventListener('click', (e) => {
   e.currentTarget.textContent = playing ? '暂停' : '继续';
 });
 
-$('#cPngB').addEventListener('click', () => downloadPNG(cvB, `新中式-典雅-${stamp()}.png`));
-$('#cPngA').addEventListener('click', () => downloadPNG(cvA, `新中式-材质-${stamp()}.png`));
+$('#cPng1').addEventListener('click', () => downloadPNG(cv1, `新中式-平涂-${stamp()}.png`));
+$('#cPng2').addEventListener('click', () => downloadPNG(cv2, `新中式-投影-${stamp()}.png`));
+$('#cPng3').addEventListener('click', () => downloadPNG(cv3, `新中式-玻璃-${stamp()}.png`));
 
 resize();
 new ResizeObserver(resize).observe(document.querySelector('.compare-body'));

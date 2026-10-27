@@ -31,10 +31,11 @@
     <section>
       <h2>视觉风格</h2>
       <div class="seg" id="styleSeg">
-        <button data-v="B" class="on">简约典雅</button>
-        <button data-v="A">材质对比</button>
+        <button data-v="B" class="on">典雅·平涂</button>
+        <button data-v="B2">典雅·投影</button>
+        <button data-v="A">材质·玻璃</button>
       </div>
-      <a class="link" href="compare.html" target="_blank" rel="noopener">打开双风格对照 →</a>
+      <a class="link" href="compare.html" target="_blank" rel="noopener">打开三版对照 →</a>
     </section>
 
     <section>
@@ -50,11 +51,11 @@
     <section id="motifSection">
       <h2>纹样母题</h2>
       <select id="motifSelect">
-        <option value="lotus">圆形花卉</option>
-        <option value="mandala">几何曼陀罗</option>
-        <option value="phoenix">简化凤凰</option>
-        <option value="cloud">传统云气</option>
-        <option value="leaf">传统花叶</option>
+        <option value="lotus">花形</option>
+        <option value="mandala">八重</option>
+        <option value="phoenix">羽枝</option>
+        <option value="cloud">云气</option>
+        <option value="leaf">叶形</option>
       </select>
     </section>
 
@@ -74,6 +75,7 @@
 
   <main class="stage light" id="stageWrap">
     <canvas id="stage"></canvas>
+    <canvas id="stageGL" hidden></canvas>
     <div class="signal" id="signal">信号良好</div>
     <div class="caption">
       <div class="cap-style" id="capStyle">简约典雅 · 圆形花卉</div>

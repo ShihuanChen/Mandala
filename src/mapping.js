@@ -1,60 +1,68 @@
 // 只做状态 → 视觉参数映射，不含绘制、不含设备读取。
-// 两套风格共享同一份状态，便于“同一输入、不同审美输出”的对照。
+// 三条路线共享同一份状态，便于“同一输入、不同审美输出”的对照。
+//   mapA  → 材质玻璃（WebGL）
+//   mapB  → 典雅·满幅平涂万花筒
+//   mapB2 → 典雅·同心多边形投影花
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-export function mapB(s) {
-  // 稳定度 → 对称份数、结构完整度、留白
-  const symmetry = Math.round(4 + s.stability * 12);        // 4–16
-  const whitespace = clamp(0.30 + s.stability * 0.28, 0.30, 0.62);
-  const motifScale = clamp(0.62 - whitespace * 0.24, 0.46, 0.58); // 纹样直径 / 短边
+export function mapA(s) {
+  // 稳定度 → 对称份数（二面体折叠的 N）
+  const symmetry = Math.round(11 + s.stability * 13);        // 11–24
+  // 复杂度 → 单元密度（每扇区球/管/珠的数量）
+  const density = clamp(0.15 + s.complexity * 0.85, 0.15, 1);
+  // 变化 → 色散强度
+  const dispersion = 0.35 + s.change * 1.15;
+  // 激活度 → 旋转与单元尺寸
+  const rotSpeed = 0.02 + s.activation * 0.16;
+  // 集中度 → 缩放（越大越聚焦中心）
+  const zoom = clamp(0.20 + s.focus * 0.55, 0.2, 0.75);
+  // 稳定度 → 色相偏移
+  const hueShift = s.stability * 0.45;
+  // 信号质量 → 透明度与泛光
+  const bloom = 0.14 + s.activation * 0.26;
 
-  // 复杂度 → 点/线/面数量
-  const pointCount = Math.round(20 + s.complexity * 280);   // 20–300
-  const lineCount = Math.round(4 + s.complexity * 28);      // 4–32
-  const faceCount = Math.round(4 + s.complexity * 20);      // 4–24
-
-  // 集中度 → 线宽、主体突出
-  const lineWidth = 1.1 + s.focus * 2.6;                    // 1.1–3.7
-  // 激活度 → 克制的生长/旋转速度
-  const rotSpeed = 0.015 + s.activation * 0.09;
-  // 变化幅度 → 呼吸与局部开合
-  const breath = 0.006 + s.change * 0.05;
-  const breathSpeed = 0.5 + s.activation * 0.7;
-  // 质量 → 整体透明度与更新权重
-  const opacity = 0.55 + s.quality * 0.45;
-
-  return {
-    symmetry, whitespace, motifScale,
-    pointCount, lineCount, faceCount,
-    lw: lineWidth, rotSpeed, breath, breathSpeed, opacity,
-    contrast: 0.7 + s.focus * 0.3,
-  };
+  return { symmetry, density, dispersion, rotSpeed, zoom, hueShift, bloom };
 }
 
-export function mapA(s) {
-  // 复杂度 → 层数/花瓣/珠体/粒子
-  const layers = Math.round(3 + s.complexity * 3);          // 3–6
-  const petals = Math.round(8 + s.stability * 8 + s.complexity * 4); // 8–20
-  const orbs = Math.round(4 + s.complexity * 18);           // 4–22
-  const ribbons = Math.round(3 + s.activation * 5);         // 3–8
-  const particles = Math.round(10 + s.complexity * 50);     // 10–60
+export function mapB(s) {
+  // 稳定度 → 对称份数（扇区数，每个扇区再镜像一次）
+  const symmetry = Math.round(5 + s.stability * 9);           // 5–14
+  // 复杂度 → 每扇区图元数量
+  const shapes = Math.round(6 + s.complexity * 22);           // 6–28
+  // 集中度 → 主纹样放大、描边加粗
+  const scale = 0.86 + s.focus * 0.30;
+  const lw = 1.6 + s.focus * 2.8;
+  // 变化 → 形变幅度
+  const deform = 0.25 + s.change * 0.85;
+  // 激活度 → 缓慢旋转
+  const rotSpeed = 0.008 + s.activation * 0.055;
+  // 稳定度 → 色相与饱和度
+  const hueShift = s.stability * 0.55;
+  const sat = 0.88 + s.focus * 0.22;
+  const opacity = 0.82 + s.quality * 0.18;
 
-  // 激活度 → 旋转速度、丝带长度、发光
-  const rotSpeed = 0.02 + s.activation * 0.30;
-  const ribbonLen = 0.36 + s.activation * 0.46;
-  const glow = 2 + s.activation * 12;
-  // 变化 → 局部扭曲
-  const distortion = s.change * 0.55;
-  // 集中 → 核心比例与亮度
-  const coreScale = 0.085 + s.focus * 0.085;
-  const opacity = 0.55 + s.quality * 0.45;
+  return { symmetry, shapes, scale, lw, deform, rotSpeed, hueShift, sat, opacity };
+}
 
-  return {
-    layers, petals, orbs, ribbons, particles,
-    rotSpeed, ribbonLen, glow, distortion, coreScale, opacity,
-    hueShift: s.stability * 60,
-  };
+export function mapB2(s) {
+  // 稳定度 → 多边形边数
+  const sides = Math.round(6 + s.stability * 6);              // 6–12
+  // 复杂度 → 层数
+  const layers = Math.round(2 + s.complexity * 2);            // 2–4
+  // 复杂度 + 集中度 → 中心花瓣数
+  const petals = Math.round(18 + s.complexity * 26 + s.focus * 10); // 18–54
+  // 激活度 → 光强与呼吸
+  const light = 0.45 + s.activation * 0.55;
+  // 变化 → 花瓣开合
+  const open = 0.35 + s.change * 0.75;
+  // 集中度 → 主体缩放
+  const scale = 0.72 + s.focus * 0.28;
+  const hueShift = s.stability * 0.8;
+  const opacity = 0.8 + s.quality * 0.2;
+  const rotSpeed = 0.006 + s.activation * 0.03;
+
+  return { sides, layers, petals, light, open, scale, hueShift, opacity, rotSpeed };
 }
 
 // 帧间平滑：同一份参数对象原地插值，避免跳变

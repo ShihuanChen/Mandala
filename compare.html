@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>双风格对照 · 脑机新中式视觉</title>
+<title>三版对照 · 脑机新中式视觉</title>
 <link rel="stylesheet" href="src/styles.css">
 </head>
 <body>
 <header class="compare-head">
   <div class="t">
-    <h1>双风格对照</h1>
-    <span>同一份状态输入 · 两条审美路线</span>
+    <h1>三版对照</h1>
+    <span>同一份状态输入 · 三条审美路线</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
     <div class="chips inline" id="cPresets">
@@ -20,22 +20,28 @@
       <button data-v="unstable">波动</button>
     </div>
     <button id="cPlay" class="btn">暂停</button>
-    <button id="cPngB" class="btn ghost">导出左</button>
-    <button id="cPngA" class="btn ghost">导出右</button>
+    <button id="cPng1" class="btn ghost">导出 1</button>
+    <button id="cPng2" class="btn ghost">导出 2</button>
+    <button id="cPng3" class="btn ghost">导出 3</button>
     <a class="link" href="index.html">返回 →</a>
   </div>
 </header>
 
-<div class="compare-body">
-  <div class="pane light" id="paneB">
-    <canvas id="cvB"></canvas>
-    <div class="tag">简约典雅 · 圆形花卉</div>
-    <div class="cap"><small>风格 B</small><span id="capB">纹样正在安静下来</span></div>
+<div class="compare-body three">
+  <div class="pane light" id="pane1">
+    <canvas id="cv1"></canvas>
+    <div class="tag">典雅 · 满幅平涂</div>
+    <div class="cap"><small>B1 万花筒</small><span id="cap1">纹样正在安静下来</span></div>
   </div>
-  <div class="pane" id="paneA">
-    <canvas id="cvA"></canvas>
-    <div class="tag">材质对比 · 酸性新中式</div>
-    <div class="cap"><small>风格 A</small><span id="capA">纹样正在安静下来</span></div>
+  <div class="pane light" id="pane2">
+    <canvas id="cv2"></canvas>
+    <div class="tag">典雅 · 同心投影</div>
+    <div class="cap"><small>B2 投影花</small><span id="cap2">纹样正在安静下来</span></div>
+  </div>
+  <div class="pane" id="pane3">
+    <canvas id="cv3"></canvas>
+    <div class="tag">材质 · 玻璃径向</div>
+    <div class="cap"><small>A 玻璃</small><span id="cap3">纹样正在安静下来</span></div>
   </div>
 </div>
 
