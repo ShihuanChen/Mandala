@@ -19,21 +19,37 @@ if not defined PYEXE (
   exit /b 1
 )
 
-if not exist ".venv\Scripts\python.exe" goto nogui
-if not exist "data\deap\data_preprocessed_python\s01.dat" goto nogui
+rem ---- port 8765: EEG state server ----
+netstat -ano | findstr /c:"127.0.0.1:8765" | findstr /i "LISTENING" >nul
+if not errorlevel 1 goto ws_busy
+if not exist ".venv\Scripts\python.exe" goto ws_skip
+if not exist "data\deap\data_preprocessed_python\s01.dat" goto ws_skip
+echo [i] starting EEG state server on ws://127.0.0.1:8765
 start "BCI state server (ws://127.0.0.1:8765)" cmd /k ".venv\Scripts\python.exe server\eeg-deap-server.py --subject 1 --trial 0 --loop"
 goto serve
-
-:nogui
-echo [i] No .venv or DEAP data found. Simulation mode only.
+:ws_busy
+echo [i] 8765 already running, reuse it
+goto serve
+:ws_skip
+echo [i] no .venv or DEAP data, simulation mode only
 
 :serve
-start "" cmd /c "timeout /t 2 >nul & start http://127.0.0.1:8000/index.html"
+netstat -ano | findstr /c:"127.0.0.1:8000" | findstr /i "LISTENING" >nul
+if not errorlevel 1 goto http_busy
+start "" cmd /c "timeout /t 3 >nul & start http://127.0.0.1:8000/index.html"
 echo.
 echo   http://127.0.0.1:8000/index.html     workbench
-echo   http://127.0.0.1:8000/compare.html   A / B compare
+echo   http://127.0.0.1:8000/compare.html   three-way compare
 echo.
-echo   Do NOT double-click index.html directly: ES modules need http.
+echo   Never double-click index.html: ES modules need http.
 echo   Close this window to stop the server.
 echo.
-%PYEXE% -m http.server 8000
+%PYEXE% -m http.server 8000 --bind 127.0.0.1
+goto end
+
+:http_busy
+echo [i] 8000 already running, opening browser only
+start http://127.0.0.1:8000/compare.html
+timeout /t 3 >nul
+
+:end

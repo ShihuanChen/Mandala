@@ -1,6 +1,7 @@
 .venv/
 __pycache__/
 *.pyc
+nul
 data/deap/
 *.edf
 *.event
