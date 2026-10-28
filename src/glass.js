@@ -101,12 +101,13 @@ vec3 refract3(vec2 uv, vec2 dOff, float R){
 vec3 glass(vec3 refr, vec3 tint, float nz, float edgePow){
   float lum = dot(refr, vec3(0.333));
   float rim = pow(1.0 - nz, edgePow);
-  vec3 body = tint * (0.50 + 2.0 * lum) * mix(1.0, uTrans, 0.44);
-  body += tint * 0.16;
+  vec3 body = tint * (0.62 + 2.0 * lum) * mix(1.0, uTrans, 0.44);
+  body += tint * 0.18;
   body += tint * rim * (0.85 + 0.65 * uMetal);
   // 玻璃边是冷的，只有少量暖金；全金边会读成贴了金箔的塑料片
   vec3 rimTint = mix(vec3(1.0, 0.95, 0.86), vec3(1.0, 0.84, 0.52), 0.35);
   body += rimTint * pow(rim, 3.2) * (0.30 + 0.40 * uMetal);
+  body *= vec3(1.06, 0.99, 0.93);
   body = mix(body, vec3(dot(body, vec3(0.333))), 0.06);
   return min(body, vec3(1.25));
 }
