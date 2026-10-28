@@ -1,13 +1,16 @@
 import { StateEngine } from './state.js';
-import { mapB, mapB2, mapA, lerpParams } from './mapping.js';
+import { mapB, mapB2, mapA, pickMotif, lerpParams } from './mapping.js';
 import { drawB } from './styleB.js';
 import { drawB2 } from './styleB2.js';
 import { createStyleA } from './styleA.js';
+import { createAtmos } from './atmos.js';
 import { downloadPNG, stamp } from './export.js';
 
 const $ = (s) => document.querySelector(s);
 
 const engine = new StateEngine();
+const atmos = createAtmos(20261028);
+const atmo2 = createAtmos(77123);
 let playing = true;
 const params = { B: null, B2: null, A: null };
 let last = performance.now();
@@ -56,7 +59,11 @@ function frame(now) {
   params.B2 = params.B2 ? lerpParams(params.B2, mapB2(st), alpha) : { ...mapB2(st) };
   params.A = params.A ? lerpParams(params.A, mapA(st), alpha) : { ...mapA(st) };
 
-  drawB(ctx1, box.w, box.h, st, params.B, st.time, 20261027);
+  atmos.draw(ctx1, box.w, box.h, st, st.time, { airy: 0.75 + params.B.alpha * 0.35 });
+  params.B.motif = pickMotif(st);
+  drawB(ctx1, box.w, box.h, st, params.B, st.time, 20261028);
+
+  atmo2.draw(ctx2, box.w, box.h, st, st.time, { airy: 0.85 });
   drawB2(ctx2, box.w, box.h, st, params.B2, st.time);
   if (!rendererA) rendererA = createStyleA(cv3);
   if (rendererA) rendererA.draw(st, params.A, st.time, dt);
@@ -64,9 +71,9 @@ function frame(now) {
     warned = true;
     const g3 = cv3.getContext('2d');
     if (g3) {
-      g3.fillStyle = '#E9E5DC';
+      g3.fillStyle = '#0A1018';
       g3.fillRect(0, 0, cv3.width, cv3.height);
-      g3.fillStyle = '#6B6355';
+      g3.fillStyle = '#B4AC9C';
       g3.font = '14px system-ui, sans-serif';
       g3.textAlign = 'center';
       g3.fillText('浏览器未启用 WebGL2，此栏不可用', cv3.width / 2, cv3.height / 2);

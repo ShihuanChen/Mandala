@@ -3,6 +3,7 @@ import { mapB, mapB2, mapA, mapP, pickMotif, lerpParams } from './mapping.js';
 import { drawB } from './styleB.js';
 import { drawB2 } from './styleB2.js';
 import { createStyleA } from './styleA.js';
+import { createAtmos } from './atmos.js';
 import { downloadPNG, downloadJSON, stamp } from './export.js';
 
 const $ = (s) => document.querySelector(s);
@@ -12,6 +13,7 @@ const glCanvas = $('#stageGL');
 const ctx = canvas.getContext('2d', { alpha: false });
 
 const engine = new StateEngine();
+const atmos = createAtmos(20261028);
 
 let style = 'B';
 let motifPick = 'auto';   // auto = 由状态选择母题
@@ -26,13 +28,14 @@ let record = [];
 let replay = null;
 let rendererA = null;
 
+// 只用京绣五定式
 const MOTIF_LABEL = {
-  lotus: '莲花', baoxiang: '宝相花', vine: '缠枝',
-  cloud: '云气', wave: '水波',
+  tuanhua: '宝相团花', mudan: '缠枝牡丹', fenghuang: '凤凰羽',
+  haishui: '海水江崖', dazi: '打籽团',
 };
 const MOTIF_SEED = {
-  lotus: 20261027, baoxiang: 7717, vine: 9091,
-  cloud: 31415, wave: 27182,
+  tuanhua: 20261028, mudan: 6113, fenghuang: 9091,
+  haishui: 27182, dazi: 45013,
 };
 
 const STATE_ROWS = [
@@ -100,9 +103,9 @@ setInterval(() => {
 const styleSeg = $('#styleSeg');
 
 const STYLE_LABEL = {
-  B: '典雅 · 满幅平涂',
-  B2: '典雅 · 同心投影',
-  A: '材质 · 玻璃径向',
+  B: '京绣 · 团花',
+  B2: '京绣 · 满地',
+  A: '点翠 · 琉璃',
 };
 
 function applyStyle() {
@@ -111,14 +114,14 @@ function applyStyle() {
   glCanvas.hidden = !isA;
   $('#motifSection').hidden = style !== 'B';
   $('#capStyle').textContent = style === 'B'
-    ? `典雅 · 同心平涂 · ${MOTIF_LABEL[currentMotif()]}`
+    ? `京绣 · 团花 · ${MOTIF_LABEL[currentMotif()]}`
     : STYLE_LABEL[style];
 }
 
 // 母题：默认跟随状态（规范「非遗-曼陀罗」的中心/内环/外环母题分工），也可手动锁定
 function currentMotif() {
   if (motifPick !== 'auto') return motifPick;
-  return engine.last ? pickMotif(engine.last) : 'lotus';
+  return engine.last ? pickMotif(engine.last) : 'tuanhua';
 }
 styleSeg.addEventListener('click', (e) => {
   const b = e.target.closest('button');
@@ -262,7 +265,7 @@ function updateHud(st) {
   }).join('');
 
   $('#capLine').textContent = captionText(st);
-  if (style === 'B') $('#capStyle').textContent = `典雅 · 同心平涂 · ${MOTIF_LABEL[currentMotif()]}`;
+  if (style === 'B') $('#capStyle').textContent = `京绣 · 团花 · ${MOTIF_LABEL[currentMotif()]}`;
 
   const waiting = engine.mode === 'realtime' && !engine.wsState;
   let text = '信号良好', warn = false;
@@ -312,8 +315,17 @@ function frame(now) {
   const pr = prev ? lerpParams(prev, target, alpha) : { ...target };
   paramsBy[style] = pr;
 
-  if (style === 'B') drawB(ctx, W, H, st, pr, st.time, MOTIF_SEED[currentMotif()]);
-  else if (style === 'B2') drawB2(ctx, W, H, st, pr, st.time);
+  if (style === 'B' || style === 'B2') {
+    // 先铺通透空间（渐变 + 雾 + 三层粒子），母题再叠在上面；
+    // 母题的填空隙处能看到粒子在动，这是"通透"的来源。
+    atmos.draw(ctx, W, H, st, st.time, { airy: 0.75 + pr.alpha * 0.35 });
+    if (style === 'B') {
+      pr.motif = currentMotif();
+      drawB(ctx, W, H, st, pr, st.time, MOTIF_SEED[currentMotif()]);
+    } else {
+      drawB2(ctx, W, H, st, pr, st.time);
+    }
+  }
   else {
     if (!rendererA) rendererA = createStyleA(glCanvas);
     if (rendererA) rendererA.draw(st, pr, st.time, dt);

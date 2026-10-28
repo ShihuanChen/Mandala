@@ -42,9 +42,10 @@ echo   http://127.0.0.1:8000/index.html     workbench
 echo   http://127.0.0.1:8000/compare.html   three-way compare
 echo.
 echo   Never double-click index.html: ES modules need http.
+echo   serve.py sends no-store, so a refreshed page never runs stale modules.
 echo   Close this window to stop the server.
 echo.
-%PYEXE% -m http.server 8000 --bind 127.0.0.1
+%PYEXE% serve.py 8000
 goto end
 
 :http_busy

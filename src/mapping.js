@@ -65,22 +65,22 @@ export function mapP(s) {
   };
 }
 
-// ─────────── 纹样层：状态 → 母题 ───────────
-// 规范「非遗-曼陀罗」：中心用团花/宝相，内环用花瓣/枝蔓，外环用云气/水纹/边饰。
-// 这里让状态在候选母题间选择，用户仍可手动锁定。
-//   calm      → 莲/团花（收束、对称）
-//   focused   → 宝相花（中心强调最强）
-//   active    → 缠枝（路径连续、生长）
-//   unstable  → 云气（扰动、方向离散）
+// ─────────── 纹样层：状态 → 京绣母题 ───────────
+// 只用京绣的五个定式，各自对应一种主导状态，避免母题与状态脱钩：
+//   tuanhua   宝相团花：稳定、对称、中心收束（默认态）
+//   mudan     缠枝牡丹：活跃但有序，生长连续
+//   fenghuang 凤凰羽：高激活、尖锐、方向感强
+//   haishui   海水江崖：高变化、低稳定，边界翻涌
+//   dazi      打籽团：高复杂、低激活，靠颗粒密度承载信息
 export function pickMotif(s) {
   const score = {
-    lotus: 1.0 * s.stability - 0.6 * Math.abs(s.activation - 0.3) - 0.4 * s.change,
-    baoxiang: 1.0 * s.focus + 0.5 * s.stability - 0.5 * s.change,
-    vine: 0.9 * s.activation + 0.6 * s.change + 0.5 * s.complexity,
-    cloud: 1.0 * s.change + 0.6 * Math.abs(0.5 - s.stability) + 0.4 * s.complexity,
-    wave: 0.5 * s.complexity + 0.5 * s.change + 0.3 * s.activation,
+    tuanhua: 1.15 * s.stability + 0.55 * s.focus - 0.35 * s.change,
+    mudan: 0.55 * s.activation + 0.45 * s.stability + 0.35 * s.complexity,
+    fenghuang: 1.05 * s.activation + 0.45 * s.focus - 0.30 * Math.abs(0.5 - s.stability),
+    haishui: 1.10 * s.change + 0.55 * (1 - s.stability) + 0.30 * s.complexity,
+    dazi: 0.85 * s.complexity + 0.45 * (1 - s.activation) + 0.25 * s.stability,
   };
-  let best = 'lotus';
+  let best = 'tuanhua';
   for (const k in score) if (score[k] > score[best]) best = k;
   return best;
 }
@@ -108,19 +108,20 @@ export function mapA(s) {
 export function mapB(s) {
   const P = mapP(s);
   return {
-    symmetry: Math.round(lerp(10, 20, P.P14_radialRepeat)),       // P14
-    slots: P.P9_coverage > 0.74 ? 3 : (P.P9_coverage > 0.48 ? 2 : 1), // P9 → 每环槽位
-    scale: 0.90 + P.P13_centerEmphasis * 0.24,                    // P13
-    lw: 1.1 + P.P17_lineWidth * 2.2,                              // P17
-    deform: 0.16 + P.P7_curvature * 0.72,                         // P7
-    rotSpeed: lerp(0.0025, 0.016, P.P20_rotSpeed),                // 放慢
+    symmetry: Math.round(lerp(10, 20, P.P14_radialRepeat)),       // P14 → 外瓣数
+    slots: P.P9_coverage > 0.74 ? 3 : (P.P9_coverage > 0.48 ? 2 : 1), // P9 → 缠枝密度
+    scale: 0.90 + P.P13_centerEmphasis * 0.24,                    // P13 → 团花尺度
+    lw: 0.85 + P.P17_lineWidth * 1.9,                             // P17 → 盘金线宽
+    deform: 0.16 + P.P7_curvature * 0.72,                         // P7 → 瓣形曲率
+    layers: Math.round(lerp(3, 7, P.P11_layers)),                 // P11 → 套针层数
+    grain: P.P10_grain,                                           // P10 → 打籽密度
+    rotSpeed: lerp(0.0025, 0.014, P.P20_rotSpeed),                // 放慢
     hueShift: P.P1_hue,
-    sat: 0.42 + P.P3_saturation * 0.9,                            // P3
+    sat: P.P3_saturation,                                         // P3
     light: P.P2_lightness,                                        // P2
-    metal: P.P18_metal,                                           // P18
-    alpha: 0.55 + P.P19_transparency * 0.42,                      // P19 → 图元不透明度
-    closure: P.P16_closure,                                       // P16 → 外圈边界闭合
-    straight: P.P6_straightRatio,                                 // P6
+    metal: P.P18_metal,                                           // P18 → 金线亮度
+    alpha: 0.58 + P.P19_transparency * 0.40,                      // P19 → 母题不透明度
+    closure: P.P16_closure,                                       // P16 → 边饰闭合
     opacity: 0.82 + s.quality * 0.18,
   };
 }
@@ -128,18 +129,19 @@ export function mapB(s) {
 export function mapB2(s) {
   const P = mapP(s);
   return {
-    sides: Math.round(lerp(8, 24, P.P14_radialRepeat)),           // P14 → 边数
-    layers: Math.round(lerp(5, 9, P.P11_layers)),                 // P11 → 层数（加密）
-    petals: Math.round(lerp(24, 64, P.P10_grain)),                // P10 → 中心花瓣
-    units: Math.round(lerp(5, 11, P.P9_coverage)),                // P9 → 每层单元
-    scale: 0.78 + P.P13_centerEmphasis * 0.24,                    // P13
-    open: 0.30 + P.P7_curvature * 0.70,                           // P7
+    sides: Math.round(lerp(6, 16, P.P14_radialRepeat)),           // P14 → 单元瓣数
+    layers: Math.round(lerp(2, 6, P.P11_layers)),                 // P11 → 退晕层数
+    grain: P.P10_grain,                                           // P10 → 籽粒密度
+    goldW: 0.30 + P.P18_metal * 0.85,                             // P18 → 金边
+    units: 0.35 + P.P9_coverage * 0.62,                           // P9 → 可见单元比例
+    gap: P.P15_ringGap,                                           // P15 → 格点间距
+    open: P.P7_curvature,                                         // P7 → 单元开合
+    alpha: 0.40 + (1 - P.P19_transparency) * 0.45,                // P19 → 叠层强度
     hueShift: P.P1_hue,
-    light: P.P2_lightness,                                        // P2
-    metal: P.P18_metal,                                           // P18
-    alpha: 0.16 + (1 - P.P19_transparency) * 0.30,                // P19 → 叠层透明度（通透）
-    gap: P.P15_ringGap,                                           // P15 → 层间距
-    rotSpeed: lerp(0.002, 0.012, P.P20_rotSpeed),                 // 放慢
+    sat: P.P3_saturation,
+    light: P.P2_lightness,
+    metal: P.P18_metal,
+    rotSpeed: lerp(0.0016, 0.009, P.P20_rotSpeed),                // 放慢
     opacity: 0.8 + s.quality * 0.2,
   };
 }

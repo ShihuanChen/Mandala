@@ -27,16 +27,42 @@ const float PI = 3.141592653589793;
 
 float hash(float n){ return fract(sin(n * 127.1) * 43758.5453); }
 
-// 低饱和冷调色板：靛灰 / 青灰 / 香槟 / 藕 / 深蓝，深底上靠明度分层
+float hash21(vec2 p){
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+float noise2(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash21(i), b = hash21(i + vec2(1.0, 0.0));
+  float c = hash21(i + vec2(0.0, 1.0)), d = hash21(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+// 浮尘：极小的亮点，缓慢上浮。不发光、不闪烁，只提供"空气里还有东西"的证据
+float dust(vec2 p, float t, float dens){
+  vec2 g = p * 22.0;
+  g.y += t * 0.06;
+  vec2 id = floor(g);
+  vec2 f = fract(g) - 0.5;
+  float h = hash21(id);
+  if(h < 1.0 - dens) return 0.0;
+  vec2 off = vec2(hash21(id + 1.3), hash21(id + 2.7)) - 0.5;
+  float d = length(f - off * 0.72);
+  float tw = 0.72 + 0.28 * sin(t * 0.5 + h * 26.0);
+  return smoothstep(0.10, 0.0, d) * (0.22 + 0.30 * hash21(id + 5.1)) * tw;
+}
+
+// 京绣/点翠色板：翠蓝、宝蓝、石绿、明金、绛红，深底上靠色相分层
 vec3 pal(float t){
   t = fract(t) * 5.0;
   float i = floor(t);
   float f = fract(t);
-  vec3 c0 = vec3(0.50, 0.62, 0.78);
-  vec3 c1 = vec3(0.56, 0.76, 0.72);
-  vec3 c2 = vec3(0.88, 0.78, 0.56);
-  vec3 c3 = vec3(0.80, 0.62, 0.68);
-  vec3 c4 = vec3(0.42, 0.50, 0.66);
+  vec3 c0 = vec3(0.30, 0.62, 0.72);   // 翠蓝
+  vec3 c1 = vec3(0.22, 0.34, 0.62);   // 宝蓝
+  vec3 c2 = vec3(0.80, 0.64, 0.34);   // 明金
+  vec3 c3 = vec3(0.44, 0.66, 0.50);   // 石绿
+  vec3 c4 = vec3(0.66, 0.26, 0.24);   // 绛红
   vec3 a = c0, b = c1;
   if(i < 0.5){ a = c0; b = c1; }
   else if(i < 1.5){ a = c1; b = c2; }
@@ -62,19 +88,30 @@ vec3 glass(vec3 refr, vec3 tint, float nz, float edgePow){
   vec3 body = tint * (0.26 + 0.70 * lum) * mix(1.0, uTrans, 0.40);
   body += tint * 0.14;
   body += tint * rim * (0.72 + 0.65 * uMetal);
-  body += vec3(0.90, 0.94, 1.0) * pow(rim, 3.0) * 0.30;
+  vec3 rimTint = mix(vec3(1.0, 0.84, 0.52), vec3(0.90, 0.94, 1.0), 0.42);
+  body += rimTint * pow(rim, 3.0) * (0.26 + 0.34 * uMetal);
   return body;
 }
 
 void main(){
   vec2 uv = gl_FragCoord.xy / uRes;
   vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / min(uRes.x, uRes.y);
-  float R = 0.500 * mix(1.0, 0.94, uFocus);
+  float R = 0.455 * mix(1.0, 0.97, uFocus);
 
   if(uBand < -0.5){
-    // 深底 + 中心微透的空间层次（不是光源）
-    float d = smoothstep(1.05, 0.0, length(p));
-    vec3 bg = vec3(0.030, 0.038, 0.048) + vec3(0.020, 0.026, 0.030) * d;
+    // 通透空间：不是纯黑底。中心抬亮、边缘压深，色相保持偏青蓝，
+    // 再由两层低频雾和一层浮尘提供深度证据。
+    float d = length(p);
+    vec3 bg = mix(vec3(0.062, 0.098, 0.132), vec3(0.008, 0.013, 0.022), smoothstep(0.0, 0.92, d));
+    // 背后一层微光：抬升中心，让主体像浮在有光的空气里
+    bg += vec3(0.045, 0.072, 0.098) * exp(-d * d * 3.4);
+    // 低频雾：两个尺度，极慢漂移
+    float n1 = noise2(p * 2.4 + vec2(uTime * 0.006, -uTime * 0.004));
+    float n2 = noise2(p * 5.1 - vec2(uTime * 0.010, uTime * 0.007));
+    bg += vec3(0.050, 0.068, 0.082) * (0.55 * n1 + 0.45 * n2) * exp(-d * d * 1.6);
+    // 浮尘
+    float du = dust(p, uTime, 0.42) + 0.6 * dust(p * 1.9 + 7.3, uTime * 1.3, 0.30);
+    bg += vec3(0.78, 0.72, 0.56) * du;
     outColor = vec4(bg, 1.0);
     return;
   }

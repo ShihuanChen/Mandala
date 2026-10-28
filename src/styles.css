@@ -1,14 +1,16 @@
 :root {
-  --paper: #FBF7EF;
-  --panel: #F6F1E6;
-  --panel-2: #EFE8DA;
-  --line: #E1D8C6;
-  --line-soft: #EBE3D4;
-  --ink: #242019;
-  --ink-2: #4A4237;
-  --muted: #8A7E6C;
-  --accent: #A2402F;
-  --gold: #AE8850;
+  /* 深色宫夜：底不取纯黑，留出可被"看进去"的层次 */
+  --paper: #070A10;
+  --panel: #0B0F17;
+  --panel-2: #111724;
+  --line: #1E2635;
+  --line-soft: #161D29;
+  --ink: #EAE3D3;
+  --ink-2: #B4AC9C;
+  --muted: #756E5D;
+  --accent: #B85A47;
+  --gold: #C9A24C;
+  --gold-soft: rgba(201, 162, 76, .34);
   --radius: 9px;
 }
 
@@ -35,7 +37,9 @@ h1, h2, h3 { font-family: "Songti SC", "STSong", "Noto Serif SC", "Source Han Se
 
 /* ---------------- 侧栏 ---------------- */
 .panel {
-  background: var(--panel);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.022), rgba(255,255,255,0) 38%),
+    var(--panel);
   display: flex;
   flex-direction: column;
   gap: 22px;
@@ -118,9 +122,9 @@ section > h2 {
 }
 .chips button:hover { border-color: var(--gold); color: var(--ink); }
 .chips button.on {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: #F7F0E1;
+  background: rgba(201, 162, 76, .16);
+  border-color: rgba(201, 162, 76, .52);
+  color: #EBD9AE;
 }
 
 select {
@@ -129,7 +133,7 @@ select {
   font: inherit;
   font-size: 12.5px;
   color: var(--ink);
-  background: var(--paper);
+  background-color: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 7px;
   padding: 8px 30px 8px 10px;
@@ -147,7 +151,7 @@ select {
   appearance: none;
   font: inherit; font-size: 12.5px;
   color: var(--ink);
-  background: var(--paper);
+  background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 7px;
   padding: 9px 10px;
@@ -156,14 +160,15 @@ select {
 }
 .btn:hover { border-color: var(--ink-2); }
 .btn:active { transform: translateY(1px); }
-.btn.primary { background: var(--ink); color: #F7F0E1; border-color: var(--ink); }
+.btn.primary { background: rgba(201, 162, 76, .14); color: #EBD9AE; border-color: rgba(201, 162, 76, .46); }
+.btn.primary:hover { background: rgba(201, 162, 76, .22); border-color: rgba(201, 162, 76, .74); }
 .btn.ghost { background: transparent; }
 .btn.tiny { font-size: 11.5px; padding: 7px 8px; color: var(--muted); }
 .btn.wide { flex: 1; }
 
 .link {
   font-size: 11.5px;
-  color: var(--accent);
+  color: #C97A63;
   text-decoration: none;
   letter-spacing: .01em;
 }
@@ -182,7 +187,8 @@ select {
 /* ---------------- 主视觉 ---------------- */
 .stage {
   position: relative;
-  background: #08080B;
+  background:
+    radial-gradient(78% 62% at 50% 44%, #12202F 0%, #0A121C 46%, #05080E 78%, #03050A 100%);
   overflow: hidden;
   min-width: 0;
   min-height: 0;
@@ -223,8 +229,9 @@ select {
   padding: 6px 11px;
   border-radius: 999px;
   color: rgba(240, 232, 214, .9);
-  background: rgba(20, 18, 26, .42);
-  border: 1px solid rgba(240, 232, 214, .18);
+  background: rgba(12, 18, 28, .55);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(201, 162, 76, .22);
   backdrop-filter: blur(6px);
   transition: all .3s;
 }
