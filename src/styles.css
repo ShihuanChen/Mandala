@@ -203,7 +203,6 @@ select {
   text-shadow: 0 1px 14px rgba(0,0,0,.55);
   transition: color .4s;
 }
-.stage.light .caption { color: #3A3227; text-shadow: none; }
 .cap-style {
   font-size: 10.5px;
   letter-spacing: .22em;
@@ -229,9 +228,7 @@ select {
   backdrop-filter: blur(6px);
   transition: all .3s;
 }
-.stage.light .signal { color: #4A4237; background: rgba(255,252,244,.6); border-color: rgba(90,72,44,.18); }
 .signal.warn { color: #FFD9A8; border-color: rgba(255,180,90,.5); }
-.stage.light .signal.warn { color: #9A5A1E; border-color: rgba(160,90,30,.4); }
 
 /* ---------------- 右栏状态 ---------------- */
 .state-row {
@@ -268,12 +265,23 @@ select {
 
 .params {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 5px 10px;
+  grid-template-columns: 1fr;
+  gap: 5px;
   font-size: 11px;
   color: var(--ink-2);
 }
-.params div { display: flex; justify-content: space-between; gap: 6px; border-bottom: 1px dotted var(--line-soft); padding-bottom: 3px; }
+/* 六层一行：层名 + 三个 P 值 */
+.params .player {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px dotted var(--line-soft);
+  padding-bottom: 3px;
+}
+.params .player > span { color: var(--ink-2); letter-spacing: .08em; }
+.params .player > div { display: flex; justify-content: space-between; gap: 4px; }
+.params .pcell { display: flex; align-items: baseline; gap: 3px; font-size: 10px; opacity: .78; }
 .params b { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
 
 /* ---------------- 对照页 ---------------- */

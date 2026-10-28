@@ -1,5 +1,5 @@
 import { StateEngine, PRESETS } from './state.js';
-import { mapB, mapB2, mapA, lerpParams } from './mapping.js';
+import { mapB, mapB2, mapA, mapP, pickMotif, lerpParams } from './mapping.js';
 import { drawB } from './styleB.js';
 import { drawB2 } from './styleB2.js';
 import { createStyleA } from './styleA.js';
@@ -14,7 +14,7 @@ const ctx = canvas.getContext('2d', { alpha: false });
 const engine = new StateEngine();
 
 let style = 'B';
-let motif = 'lotus';
+let motifPick = 'auto';   // auto = 由状态选择母题
 let playing = true;
 const paramsBy = {};
 let W = 1, H = 1;
@@ -27,12 +27,12 @@ let replay = null;
 let rendererA = null;
 
 const MOTIF_LABEL = {
-  lotus: '花形', mandala: '八重', phoenix: '羽枝',
-  cloud: '云气', leaf: '叶形',
+  lotus: '莲花', baoxiang: '宝相花', vine: '缠枝',
+  cloud: '云气', wave: '水波',
 };
 const MOTIF_SEED = {
-  lotus: 20261027, mandala: 7717, phoenix: 9091,
-  cloud: 31415, leaf: 27182,
+  lotus: 20261027, baoxiang: 7717, vine: 9091,
+  cloud: 31415, wave: 27182,
 };
 
 const STATE_ROWS = [
@@ -40,14 +40,15 @@ const STATE_ROWS = [
   ['change', '变化幅度'], ['focus', '集中度'], ['quality', '信号质量'],
 ];
 
-const PARAM_META = {
-  B: [['symmetry', '对称份数', 1], ['shapes', '图元数量', 1], ['lw', '描边宽度', 1],
-      ['deform', '形变幅度', 2], ['scale', '主体缩放', 2], ['rotSpeed', '旋转速度', 3]],
-  B2: [['sides', '多边形边数', 1], ['layers', '叠层数', 1], ['petals', '中心花瓣', 1],
-       ['light', '光强', 2], ['open', '花瓣开合', 2], ['scale', '主体缩放', 2]],
-  A: [['symmetry', '对称份数', 1], ['density', '单元密度', 2], ['dispersion', '色散强度', 2],
-      ['zoom', '聚焦', 2], ['bloom', '泛光', 2], ['rotSpeed', '旋转速度', 3]],
-};
+// 参数面板按规范的六层显示（P1–P20），证明映射链路是活的
+const LAYER_ROWS = [
+  ['色彩', [['P1_hue', '色相'], ['P3_saturation', '饱和'], ['P2_lightness', '明度']]],
+  ['形态', [['P6_straightRatio', '直曲'], ['P7_curvature', '曲率'], ['P8_sharpness', '尖锐']]],
+  ['密度', [['P9_coverage', '覆盖'], ['P10_grain', '颗粒'], ['P11_layers', '层数']]],
+  ['结构', [['P13_centerEmphasis', '中心'], ['P14_radialRepeat', '径向'], ['P16_closure', '闭合']]],
+  ['材质', [['P17_lineWidth', '线宽'], ['P18_metal', '高光'], ['P19_transparency', '透明']]],
+  ['动态', [['P20_rotSpeed', '旋转'], ['P20_grow', '生长'], ['P20_jitter', '扰动']]],
+];
 
 // ---------- 状态行 ----------
 const barsEl = $('#bars');
@@ -106,13 +107,18 @@ const STYLE_LABEL = {
 
 function applyStyle() {
   const isA = style === 'A';
-  stageWrap.classList.toggle('light', !isA);
   canvas.hidden = isA;
   glCanvas.hidden = !isA;
   $('#motifSection').hidden = style !== 'B';
   $('#capStyle').textContent = style === 'B'
-    ? `典雅 · 满幅平涂 · ${MOTIF_LABEL[motif]}`
+    ? `典雅 · 同心平涂 · ${MOTIF_LABEL[currentMotif()]}`
     : STYLE_LABEL[style];
+}
+
+// 母题：默认跟随状态（规范「非遗-曼陀罗」的中心/内环/外环母题分工），也可手动锁定
+function currentMotif() {
+  if (motifPick !== 'auto') return motifPick;
+  return engine.last ? pickMotif(engine.last) : 'lotus';
 }
 styleSeg.addEventListener('click', (e) => {
   const b = e.target.closest('button');
@@ -124,7 +130,7 @@ styleSeg.addEventListener('click', (e) => {
 });
 
 $('#motifSelect').addEventListener('change', (e) => {
-  motif = e.target.value;
+  motifPick = e.target.value;
   applyStyle();
 });
 
@@ -247,17 +253,16 @@ function updateHud(st) {
     if (el.input.disabled) el.input.value = v;
   }
 
-  const pr = paramsBy[style];
-  if (pr) {
-    const meta = PARAM_META[style];
-    $('#params').innerHTML = meta.map(([k, label, dec]) => {
-      const v = pr[k];
-      const text = dec === 1 ? String(Math.round(v)) : v.toFixed(dec);
-      return `<div><span>${label}</span><b>${text}</b></div>`;
-    }).join('');
-  }
+  // 参数面板：显示 P1–P20 六层，随状态实时变化
+  const P = mapP(st);
+  $('#params').innerHTML = LAYER_ROWS.map(([layer, items]) => {
+    const cells = items.map(([k, label]) =>
+      `<span class="pcell">${label}<b>${P[k].toFixed(2)}</b></span>`).join('');
+    return `<div class="player"><span>${layer}</span><div>${cells}</div></div>`;
+  }).join('');
 
   $('#capLine').textContent = captionText(st);
+  if (style === 'B') $('#capStyle').textContent = `典雅 · 同心平涂 · ${MOTIF_LABEL[currentMotif()]}`;
 
   const waiting = engine.mode === 'realtime' && !engine.wsState;
   let text = '信号良好', warn = false;
@@ -294,18 +299,20 @@ function frame(now) {
     st = sampleReplay(now);
     isReplay = !!st;
     if (!st) replay = null;
-  }  if (!st) {
+  }
+  if (!st) {
     if (playing) { elapsed += dt; st = engine.tick(dt); }
     else st = engine.last ? { ...engine.last } : engine.tick(0);
   }
 
   const target = style === 'B' ? mapB(st) : style === 'B2' ? mapB2(st) : mapA(st);
-  const alpha = isReplay ? 1 : 1 - Math.exp(-dt * (2 + st.quality * 7));
+  // 收敛放慢：观感更平稳，参数不追帧（规范「更新节奏」）
+  const alpha = isReplay ? 1 : 1 - Math.exp(-dt * (0.8 + st.quality * 1.5));
   const prev = paramsBy[style];
   const pr = prev ? lerpParams(prev, target, alpha) : { ...target };
   paramsBy[style] = pr;
 
-  if (style === 'B') drawB(ctx, W, H, st, pr, st.time, MOTIF_SEED[motif]);
+  if (style === 'B') drawB(ctx, W, H, st, pr, st.time, MOTIF_SEED[currentMotif()]);
   else if (style === 'B2') drawB2(ctx, W, H, st, pr, st.time);
   else {
     if (!rendererA) rendererA = createStyleA(glCanvas);
