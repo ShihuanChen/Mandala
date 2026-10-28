@@ -65,84 +65,50 @@ export function mapP(s) {
   };
 }
 
-// ─────────── 纹样层：状态 → 京绣母题 ───────────
-// 只用京绣的五个定式，各自对应一种主导状态，避免母题与状态脱钩：
-//   tuanhua   宝相团花：稳定、对称、中心收束（默认态）
-//   mudan     缠枝牡丹：活跃但有序，生长连续
-//   fenghuang 凤凰羽：高激活、尖锐、方向感强
-//   haishui   海水江崖：高变化、低稳定，边界翻涌
-//   dazi      打籽团：高复杂、低激活，靠颗粒密度承载信息
-export function pickMotif(s) {
-  const score = {
-    tuanhua: 1.15 * s.stability + 0.55 * s.focus - 0.35 * s.change,
-    mudan: 0.55 * s.activation + 0.45 * s.stability + 0.35 * s.complexity,
-    fenghuang: 1.05 * s.activation + 0.45 * s.focus - 0.30 * Math.abs(0.5 - s.stability),
-    haishui: 1.10 * s.change + 0.55 * (1 - s.stability) + 0.30 * s.complexity,
-    dazi: 0.85 * s.complexity + 0.45 * (1 - s.activation) + 0.25 * s.stability,
-  };
-  let best = 'tuanhua';
-  for (const k in score) if (score[k] > score[best]) best = k;
-  return best;
-}
+// ─────────── 三种形式语言 ───────────
+// 图案由 mandala.js 统一生成，这里只产出"材质与形式"参数。
+// 三者的 scale / hueShift / rot 全部走同一表达式，所以同一状态下
+// 三版的图案大小与转速一致，差别只剩质感。
 
-// ─────────── 渲染层适配 ───────────
-// 三个渲染器不读状态，只读各自的参数对象；适配只做量纲换算。
-
-export function mapA(s) {
+export function mapSilk(s) {
   const P = mapP(s);
   return {
-    symmetry: Math.round(lerp(10, 26, P.P14_radialRepeat)),      // P14 → 二面体份数
-    density: clamp(0.16 + P.P10_grain * 0.84, 0.16, 1),          // P10 → 每扇区单元数
-    dispersion: 0.22 + P.P8_sharpness * 0.85,                     // P8 → 色散
-    rotSpeed: lerp(0.006, 0.052, P.P20_rotSpeed),                 // 放慢
-    zoom: clamp(0.30 + P.P13_centerEmphasis * 0.42, 0.3, 0.72),   // P13 → 主体尺度
     hueShift: P.P1_hue,
-    bloom: 0.10 + P.P18_metal * 0.22,
-    metal: P.P18_metal,
-    transparency: P.P19_transparency,
-    ringGap: P.P15_ringGap,
-    closure: P.P16_closure,
+    sat: P.P3_saturation,
+    light: P.P2_lightness,
+    lw: 0.80 + P.P17_lineWidth * 1.9,      // P17 → 盘金线宽
+    metal: P.P18_metal,                     // P18 → 金线亮度
+    alpha: 0.90 + P.P19_transparency * 0.10,
+    scale: 0.94 + P.P13_centerEmphasis * 0.10,
+    spinScale: lerp(0.55, 1.35, P.P20_rotSpeed),
   };
 }
 
-export function mapB(s) {
+export function mapLac(s) {
   const P = mapP(s);
   return {
-    symmetry: Math.round(lerp(10, 20, P.P14_radialRepeat)),       // P14 → 外瓣数
-    slots: P.P9_coverage > 0.74 ? 3 : (P.P9_coverage > 0.48 ? 2 : 1), // P9 → 缠枝密度
-    scale: 0.90 + P.P13_centerEmphasis * 0.24,                    // P13 → 团花尺度
-    lw: 0.85 + P.P17_lineWidth * 1.9,                             // P17 → 盘金线宽
-    deform: 0.16 + P.P7_curvature * 0.72,                         // P7 → 瓣形曲率
-    layers: Math.round(lerp(3, 7, P.P11_layers)),                 // P11 → 套针层数
-    grain: P.P10_grain,                                           // P10 → 打籽密度
-    rotSpeed: lerp(0.0025, 0.014, P.P20_rotSpeed),                // 放慢
-    hueShift: P.P1_hue,
-    sat: P.P3_saturation,                                         // P3
-    light: P.P2_lightness,                                        // P2
-    metal: P.P18_metal,                                           // P18 → 金线亮度
-    alpha: 0.58 + P.P19_transparency * 0.40,                      // P19 → 母题不透明度
-    closure: P.P16_closure,                                       // P16 → 边饰闭合
-    opacity: 0.82 + s.quality * 0.18,
-  };
-}
-
-export function mapB2(s) {
-  const P = mapP(s);
-  return {
-    sides: Math.round(lerp(6, 16, P.P14_radialRepeat)),           // P14 → 单元瓣数
-    layers: Math.round(lerp(2, 6, P.P11_layers)),                 // P11 → 退晕层数
-    grain: P.P10_grain,                                           // P10 → 籽粒密度
-    goldW: 0.30 + P.P18_metal * 0.85,                             // P18 → 金边
-    units: 0.35 + P.P9_coverage * 0.62,                           // P9 → 可见单元比例
-    gap: P.P15_ringGap,                                           // P15 → 格点间距
-    open: P.P7_curvature,                                         // P7 → 单元开合
-    alpha: 0.40 + (1 - P.P19_transparency) * 0.45,                // P19 → 叠层强度
     hueShift: P.P1_hue,
     sat: P.P3_saturation,
     light: P.P2_lightness,
     metal: P.P18_metal,
-    rotSpeed: lerp(0.0016, 0.009, P.P20_rotSpeed),                // 放慢
-    opacity: 0.8 + s.quality * 0.2,
+    trans: P.P19_transparency,
+    scale: 0.94 + P.P13_centerEmphasis * 0.10,
+    spinScale: lerp(0.55, 1.35, P.P20_rotSpeed),
+  };
+}
+
+export function mapGlass(s) {
+  const P = mapP(s);
+  return {
+    hueShift: P.P1_hue,
+    sat: P.P3_saturation,
+    light: P.P2_lightness,
+    metal: P.P18_metal,
+    trans: P.P19_transparency,
+    dispersion: 0.20 + P.P8_sharpness * 0.75,
+    bloom: 0.10 + P.P18_metal * 0.20,
+    scale: 0.94 + P.P13_centerEmphasis * 0.10,
+    spinScale: lerp(0.55, 1.35, P.P20_rotSpeed),
   };
 }
 

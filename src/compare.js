@@ -1,8 +1,9 @@
 import { StateEngine } from './state.js';
-import { mapB, mapB2, mapA, pickMotif, lerpParams } from './mapping.js';
-import { drawB } from './styleB.js';
-import { drawB2 } from './styleB2.js';
-import { createStyleA } from './styleA.js';
+import { mapSilk, mapLac, mapGlass, lerpParams } from './mapping.js';
+import { buildMandala, geometryParams } from './mandala.js';
+import { drawSilk } from './silk.js';
+import { drawLacquer } from './lacquer.js';
+import { createGlass } from './glass.js';
 import { createAtmos } from './atmos.js';
 import { downloadPNG, stamp } from './export.js';
 
@@ -10,15 +11,15 @@ const $ = (s) => document.querySelector(s);
 
 const engine = new StateEngine();
 const atmos = createAtmos(20261028);
-const atmo2 = createAtmos(77123);
 let playing = true;
-const params = { B: null, B2: null, A: null };
+const params = { silk: null, lac: null, glass: null };
 let last = performance.now();
+const SEED = 20261028;
 
 const cv1 = $('#cv1'), cv2 = $('#cv2'), cv3 = $('#cv3');
 const ctx1 = cv1.getContext('2d', { alpha: false });
 const ctx2 = cv2.getContext('2d', { alpha: false });
-let rendererA = null;
+let rendererGlass = null;
 let warned = false;
 let box = { w: 1, h: 1 };
 
@@ -55,25 +56,28 @@ function frame(now) {
   const st = playing ? engine.tick(dt) : (engine.last ? { ...engine.last } : engine.tick(0));
   const alpha = 1 - Math.exp(-dt * (2 + st.quality * 7));
 
-  params.B = params.B ? lerpParams(params.B, mapB(st), alpha) : { ...mapB(st) };
-  params.B2 = params.B2 ? lerpParams(params.B2, mapB2(st), alpha) : { ...mapB2(st) };
-  params.A = params.A ? lerpParams(params.A, mapA(st), alpha) : { ...mapA(st) };
+  // 三栏共用一个图案实例：同一个 seed、同一套几何参数
+  const G = buildMandala(geometryParams(st), SEED);
 
-  atmos.draw(ctx1, box.w, box.h, st, st.time, { airy: 0.75 + params.B.alpha * 0.35 });
-  params.B.motif = pickMotif(st);
-  drawB(ctx1, box.w, box.h, st, params.B, st.time, 20261028);
+  params.silk = params.silk ? lerpParams(params.silk, mapSilk(st), alpha) : { ...mapSilk(st) };
+  params.lac = params.lac ? lerpParams(params.lac, mapLac(st), alpha) : { ...mapLac(st) };
+  params.glass = params.glass ? lerpParams(params.glass, mapGlass(st), alpha) : { ...mapGlass(st) };
 
-  atmo2.draw(ctx2, box.w, box.h, st, st.time, { airy: 0.85 });
-  drawB2(ctx2, box.w, box.h, st, params.B2, st.time);
-  if (!rendererA) rendererA = createStyleA(cv3);
-  if (rendererA) rendererA.draw(st, params.A, st.time, dt);
+  atmos.draw(ctx1, box.w, box.h, st, st.time, { airy: 0.72 });
+  drawSilk(ctx1, box.w, box.h, G, params.silk, st.time);
+
+  atmos.draw(ctx2, box.w, box.h, st, st.time, { airy: 0.72 });
+  drawLacquer(ctx2, box.w, box.h, G, params.lac, st.time);
+
+  if (!rendererGlass) rendererGlass = createGlass(cv3);
+  if (rendererGlass) rendererGlass.draw(G, params.glass, st.time, dt, st);
   else if (!warned) {
     warned = true;
     const g3 = cv3.getContext('2d');
     if (g3) {
-      g3.fillStyle = '#0A1018';
+      g3.fillStyle = '#070A10';
       g3.fillRect(0, 0, cv3.width, cv3.height);
-      g3.fillStyle = '#B4AC9C';
+      g3.fillStyle = '#C8BFA8';
       g3.font = '14px system-ui, sans-serif';
       g3.textAlign = 'center';
       g3.fillText('浏览器未启用 WebGL2，此栏不可用', cv3.width / 2, cv3.height / 2);
@@ -101,8 +105,8 @@ $('#cPlay').addEventListener('click', (e) => {
 });
 
 $('#cPng1').addEventListener('click', () => downloadPNG(cv1, `新中式-平涂-${stamp()}.png`));
-$('#cPng2').addEventListener('click', () => downloadPNG(cv2, `新中式-投影-${stamp()}.png`));
-$('#cPng3').addEventListener('click', () => downloadPNG(cv3, `新中式-玻璃-${stamp()}.png`));
+$('#cPng2').addEventListener('click', () => downloadPNG(cv2, `新中式-叠影-${stamp()}.png`));
+$('#cPng3').addEventListener('click', () => downloadPNG(cv3, `新中式-折光-${stamp()}.png`));
 
 resize();
 new ResizeObserver(resize).observe(document.querySelector('.compare-body'));

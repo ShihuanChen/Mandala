@@ -111,6 +111,12 @@ class GL {
         unit++;
       } else if (typeof v === 'number') {
         gl.uniform1f(loc, v);
+      } else if (v && v.i !== undefined) {
+        gl.uniform1i(loc, v.i);
+      } else if (v && v.v4) {
+        gl.uniform4fv(loc, v.v4);
+      } else if (v && v.v1) {
+        gl.uniform1fv(loc, v.v1);
       } else if (v.length === 2) {
         gl.uniform2f(loc, v[0], v[1]);
       } else if (v.length === 3) {

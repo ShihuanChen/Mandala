@@ -1,8 +1,9 @@
 import { StateEngine, PRESETS } from './state.js';
-import { mapB, mapB2, mapA, mapP, pickMotif, lerpParams } from './mapping.js';
-import { drawB } from './styleB.js';
-import { drawB2 } from './styleB2.js';
-import { createStyleA } from './styleA.js';
+import { mapSilk, mapLac, mapGlass, mapP, lerpParams } from './mapping.js';
+import { buildMandala, geometryParams } from './mandala.js';
+import { drawSilk } from './silk.js';
+import { drawLacquer } from './lacquer.js';
+import { createGlass } from './glass.js';
 import { createAtmos } from './atmos.js';
 import { downloadPNG, downloadJSON, stamp } from './export.js';
 
@@ -15,8 +16,8 @@ const ctx = canvas.getContext('2d', { alpha: false });
 const engine = new StateEngine();
 const atmos = createAtmos(20261028);
 
-let style = 'B';
-let motifPick = 'auto';   // auto = 由状态选择母题
+// 一个图案，三种形式语言。silk = 绢本平涂，lac = 套印叠影，glass = 折光琉璃
+let style = 'silk';
 let playing = true;
 const paramsBy = {};
 let W = 1, H = 1;
@@ -26,16 +27,14 @@ let elapsed = 0;
 let lastRec = -1;
 let record = [];
 let replay = null;
-let rendererA = null;
+let rendererGlass = null;
 
-// 只用京绣五定式
-const MOTIF_LABEL = {
-  tuanhua: '宝相团花', mudan: '缠枝牡丹', fenghuang: '凤凰羽',
-  haishui: '海水江崖', dazi: '打籽团',
-};
-const MOTIF_SEED = {
-  tuanhua: 20261028, mudan: 6113, fenghuang: 9091,
-  haishui: 27182, dazi: 45013,
+const SEED = 20261028;
+
+const STYLE_LABEL = {
+  silk: '平涂 · 绢本',
+  lac: '叠影 · 套印',
+  glass: '折光 · 琉璃',
 };
 
 const STATE_ROWS = [
@@ -102,27 +101,13 @@ setInterval(() => {
 // ---------- 风格 ----------
 const styleSeg = $('#styleSeg');
 
-const STYLE_LABEL = {
-  B: '京绣 · 团花',
-  B2: '京绣 · 满地',
-  A: '点翠 · 琉璃',
-};
-
 function applyStyle() {
-  const isA = style === 'A';
-  canvas.hidden = isA;
-  glCanvas.hidden = !isA;
-  $('#motifSection').hidden = style !== 'B';
-  $('#capStyle').textContent = style === 'B'
-    ? `京绣 · 团花 · ${MOTIF_LABEL[currentMotif()]}`
-    : STYLE_LABEL[style];
+  const isGlass = style === 'glass';
+  canvas.hidden = isGlass;
+  glCanvas.hidden = !isGlass;
+  $('#capStyle').textContent = STYLE_LABEL[style];
 }
 
-// 母题：默认跟随状态（规范「非遗-曼陀罗」的中心/内环/外环母题分工），也可手动锁定
-function currentMotif() {
-  if (motifPick !== 'auto') return motifPick;
-  return engine.last ? pickMotif(engine.last) : 'tuanhua';
-}
 styleSeg.addEventListener('click', (e) => {
   const b = e.target.closest('button');
   if (!b || b.dataset.v === style) return;
@@ -130,11 +115,6 @@ styleSeg.addEventListener('click', (e) => {
   styleSeg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x.dataset.v === style));
   applyStyle();
   resize();
-});
-
-$('#motifSelect').addEventListener('change', (e) => {
-  motifPick = e.target.value;
-  applyStyle();
 });
 
 // ---------- 预设 ----------
@@ -165,18 +145,17 @@ $('#btnReset').addEventListener('click', () => {
 
 // ---------- 导出 ----------
 $('#btnPng').addEventListener('click', () => {
-  const tag = style === 'B' ? '平涂' : style === 'B2' ? '投影' : '玻璃';
-  downloadPNG(style === 'A' ? glCanvas : canvas, `新中式-${tag}-${stamp()}.png`);
+  downloadPNG(style === 'glass' ? glCanvas : canvas, `新中式-${STYLE_LABEL[style]}-${stamp()}.png`);
 });
 $('#btnJson').addEventListener('click', () => {
   downloadJSON({
-    version: '0.2', style, motif, mode: engine.mode,
+    version: '0.5', style, mode: engine.mode,
     state: engine.last, params: paramsBy[style] || null,
   }, `state-${stamp()}.json`);
 });
 $('#btnSession').addEventListener('click', () => {
   if (record.length < 2) return flashHint('会话记录不足，先播放一会儿再保存。');
-  downloadJSON({ version: '0.1', style, motif, frames: record }, `session-${stamp()}.json`);
+  downloadJSON({ version: '0.2', style, frames: record }, `session-${stamp()}.json`);
 });
 $('#btnReplay').addEventListener('click', (e) => {
   if (record.length < 4) return flashHint('暂无可回放的记录。');
@@ -196,8 +175,6 @@ function flashHint(text) {
 }
 
 // ---------- 尺寸 ----------
-// 两块画布叠在同一舞台里：切到材质版时 2D 画布隐藏、WebGL 画布显示，
-// 二者的显示尺寸一致，尺寸只跟舞台走，避免隐藏元素量到 0。
 function resize() {
   const r = stageWrap.getBoundingClientRect();
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -256,7 +233,6 @@ function updateHud(st) {
     if (el.input.disabled) el.input.value = v;
   }
 
-  // 参数面板：显示 P1–P20 六层，随状态实时变化
   const P = mapP(st);
   $('#params').innerHTML = LAYER_ROWS.map(([layer, items]) => {
     const cells = items.map(([k, label]) =>
@@ -265,7 +241,6 @@ function updateHud(st) {
   }).join('');
 
   $('#capLine').textContent = captionText(st);
-  if (style === 'B') $('#capStyle').textContent = `京绣 · 团花 · ${MOTIF_LABEL[currentMotif()]}`;
 
   const waiting = engine.mode === 'realtime' && !engine.wsState;
   let text = '信号良好', warn = false;
@@ -277,18 +252,17 @@ function updateHud(st) {
 }
 
 // ---------- 主循环 ----------
-// WebGL2 不可用时给出可见提示，避免舞台一片空白且无解释
 function noticeNoWebGL() {
   if (noticeNoWebGL.done) return;
   noticeNoWebGL.done = true;
   ctx.save();
-  ctx.fillStyle = '#E9E5DC';
+  ctx.fillStyle = '#070A10';
   ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#6B6355';
+  ctx.fillStyle = '#C8BFA8';
   ctx.font = '15px system-ui, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('当前浏览器未启用 WebGL2，材质·玻璃径向不可用', W / 2, H / 2 - 10);
-  ctx.fillText('可改用典雅·平涂或典雅·同心投影', W / 2, H / 2 + 16);
+  ctx.fillText('当前浏览器未启用 WebGL2，折光版不可用', W / 2, H / 2 - 10);
+  ctx.fillText('切到平涂或叠影即可', W / 2, H / 2 + 16);
   ctx.restore();
 }
 
@@ -308,28 +282,23 @@ function frame(now) {
     else st = engine.last ? { ...engine.last } : engine.tick(0);
   }
 
-  const target = style === 'B' ? mapB(st) : style === 'B2' ? mapB2(st) : mapA(st);
-  // 收敛放慢：观感更平稳，参数不追帧（规范「更新节奏」）
+  // 图案只有一份：三个渲染器读同一个 G
+  const G = buildMandala(geometryParams(st), SEED);
+
+  const target = style === 'silk' ? mapSilk(st) : style === 'lac' ? mapLac(st) : mapGlass(st);
   const alpha = isReplay ? 1 : 1 - Math.exp(-dt * (0.8 + st.quality * 1.5));
   const prev = paramsBy[style];
   const pr = prev ? lerpParams(prev, target, alpha) : { ...target };
   paramsBy[style] = pr;
 
-  if (style === 'B' || style === 'B2') {
-    // 先铺通透空间（渐变 + 雾 + 三层粒子），母题再叠在上面；
-    // 母题的填空隙处能看到粒子在动，这是"通透"的来源。
-    atmos.draw(ctx, W, H, st, st.time, { airy: 0.75 + pr.alpha * 0.35 });
-    if (style === 'B') {
-      pr.motif = currentMotif();
-      drawB(ctx, W, H, st, pr, st.time, MOTIF_SEED[currentMotif()]);
-    } else {
-      drawB2(ctx, W, H, st, pr, st.time);
-    }
-  }
-  else {
-    if (!rendererA) rendererA = createStyleA(glCanvas);
-    if (rendererA) rendererA.draw(st, pr, st.time, dt);
+  if (style === 'glass') {
+    if (!rendererGlass) rendererGlass = createGlass(glCanvas);
+    if (rendererGlass) rendererGlass.draw(G, pr, st.time, dt, st);
     else noticeNoWebGL();
+  } else {
+    atmos.draw(ctx, W, H, st, st.time, { airy: 0.72 });
+    if (style === 'silk') drawSilk(ctx, W, H, G, pr, st.time);
+    else drawLacquer(ctx, W, H, G, pr, st.time);
   }
 
   if (playing && !isReplay) recordFrame(st);
@@ -339,9 +308,8 @@ function frame(now) {
 }
 
 // ---------- 启动 ----------
-// 支持 index.html?style=B2 直接进某个风格，便于截图与分享单版效果
 const qStyle = new URLSearchParams(location.search).get('style');
-if (['B', 'B2', 'A'].includes(qStyle)) {
+if (['silk', 'lac', 'glass'].includes(qStyle)) {
   style = qStyle;
   styleSeg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x.dataset.v === style));
 }
